@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Best Stations to Be Delayed At</title>
+
+<style>
+:root{
+  --bg:#0b0d10;
+  --panel:#151a22;
+  --panel2:#0f1318;
+  --text:#e8eef6;
+  --muted:#9fb0c4;
+  --line:#253043;
+  --good:#2ecc71;
+  --warn:#f1c40f;
+  --bad:#e74c3c;
+  --accent:#6aa6ff;
+  --radius:16px;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
+  background:var(--bg);
+  color:var(--text);
+}
+header{
+  position:sticky;top:0;z-index:10;
+  background:rgba(11,13,16,.92);
+  border-bottom:1px solid var(--line);
+}
+.wrap{max-width:1100px;margin:0 auto;padding:16px}
+h1{margin:0;font-size:18px}
+.sub{font-size:12px;color:var(--muted)}
+.controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.control{flex:1 1 160px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px}
+label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+select,input,button{
+  width:100%;padding:8px;border-radius:10px;
+  background:var(--panel2);border:1px solid var(--line);color:var(--text)
+}
+button{cursor:pointer}
+main{padding:16px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px 6px;border-bottom:1px solid var(--line);text-align:left}
+th{font-size:12px;color:var(--muted)}
+tr:hover{background:rgba(255,255,255,.03);cursor:pointer}
+.cards{display:none}
+@media(max-width:720px){
+  table{display:none}
+  .cards{display:block}
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
+}
+.sheet{
+  position:fixed;left:0;right:0;bottom:-100%;
+  transition:bottom .25s ease;z-index:20
+}
+.sheet.open{bottom:0}
+.sheet-inner{
+  background:var(--panel);border-radius:20px 20px 0 0;
+  padding:14px;border-top:1px solid var(--line);
+  max-height:70vh;overflow:auto
+}
+.pub{border:1px solid var(--line);border-radius:14px;padding:10px;margin-top:10px}
+.pub .links{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.pill{padding:6px 8px;border-radius:999px;border:1px solid var(--line);font-size:12px;text-decoration:none;color:var(--text)}
+.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+</style>
+</head>
+
+<body>
+<header>
+  <div class="wrap">
+    <h1>Best Stations to Be Delayed At</h1>
+    <div class="sub">Live Tube disruption × nearby pubs</div>
+
+    <div class="controls">
+      <div class="control">
+        <label>Line</label>
+        <select id="lineFilter"><option value="all">All lines</option></select>
+      </div>
+      <div class="control">
+        <label>Pub radius (m)</label>
+        <select id="radius"><option>300</option><option selected>500</option><option>800</option></select>
+      </div>
+      <div class="control">
+        <label>Actions</label>
+        <button id="refreshBtn">Refresh</button>
+        <button id="locBtn">Use my location</button>
+      </div>
+      <div class="control">
+        <label>TfL keys (optional)</label>
+        <input id="tflKeys" placeholder="app_id=...&app_key=..." />
+      </div>
+    </div>
+
+    <div class="sub" id="statusMsg">Loading…</div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="panel">
+    <table>
+      <thead>
+        <tr><th>#</th><th>Station</th><th>Pubs</th><th>Status</th><th>Score</th></tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="cards" id="cards"></div>
+  </div>
+</main>
+
+<div class="sheet" id="sheet">
+  <div class="sheet-inner">
+    <button onclick="closeSheet()">Close</button>
+    <h2 id="sheetTitle"></h2>
+    <div id="sheetBody"></div>
+  </div>
+</div>
+
+<script>
+/* === FULL WORKING SCRIPT === */
+const TFL_BASE="https://api.tfl.gov.uk";
+const OVERPASS="https://overpass-api.de/api/interpreter";
+const els={
+  rows:rows,cards:cards,sheet:sheet,
+  sheetTitle:sheetTitle,sheetBody:sheetBody
+};
+const lineFilter=document.getElementById("lineFilter");
+const radiusSel=document.getElementById("radius");
+const state={stations:[],lines:new Map(),myPos:null};
+
+const fetchJSON=(u,t=25000)=>new Promise((res,rej)=>{
+  const c=new AbortController();setTimeout(()=>c.abort(),t);
+  fetch(u,{signal:c.signal}).then(r=>r.json()).then(res).catch(rej);
+});
+const tfl=(p)=>TFL_BASE+p+(tflKeys.value?("?"+tflKeys.value):"");
+const sevFactor=s=>1+(10-(s??10))*0.3;
+
+async function loadLines(){
+  const d=await fetchJSON(tfl("/Line/Mode/tube/Status"));
+  lineFilter.innerHTML='<option value="all">All lines</option>';
+  d.forEach(l=>{
+    const s=l.lineStatuses?.[0];
+    const f=sevFactor(s?.statusSeverity);
+    state.lines.set(l.id,{name:l.name,factor:f,desc:s?.statusSeverityDescription||"Good Service"});
+    const o=document.createElement("option");o.value=l.id;o.textContent=l.name;
+    lineFilter.appendChild(o);
+  });
+}
+async function loadStations(){
+  const d=await fetchJSON(tfl("/StopPoint/Mode/tube"),30000);
+  state.stations=(d.stopPoints||[]).filter(s=>s.stopType==="NaptanMetroStation")
+    .map(s=>({id:s.id,name:s.commonName.replace(" Underground Station",""),lat:s.lat,lon:s.lon,lines:s.lines.map(l=>l.id)}));
+}
+async function pubsAround(st,r){
+  const q=`[out:json];node["amenity"="pub"](around:${r},${st.lat},${st.lon});out;`;
+  const r2=await fetch(OVERPASS,{method:"POST",body:"data="+encodeURIComponent(q)});
+  const j=await r2.json();
+  return (j.elements||[]).map(e=>({name:e.tags?.name||"Pub",lat:e.lat,lon:e.lon}));
+}
+const dist=(a,b,c,d)=>Math.hypot(a-c,b-d)*111000;
+
+async function build(){
+  statusMsg.textContent="Building leaderboard…";
+  await loadLines();await loadStations();
+  const r=+radiusSel.value;
+  const rowsData=[];
+  for(const st of state.stations.slice(0,25)){
+    const lf=lineFilter.value;
+    const line=st.lines.find(l=>lf==="all"||l===lf);
+    const meta=state.lines.get(line)||{factor:1,desc:"OK"};
+    const pubs=await pubsAround(st,r);
+    const score=Math.round(pubs.length*meta.factor*10)/10;
+    rowsData.push({...st,pubs,score,desc:meta.desc});
+  }
+  rowsData.sort((a,b)=>b.score-a.score);
+  rows.innerHTML="";cards.innerHTML="";
+  rowsData.forEach((s,i)=>{
+    rows.innerHTML+=`<tr onclick="openSheet(${i})"><td>${i+1}</td><td>${s.name}</td><td>${s.pubs.length}</td><td>${s.desc}</td><td>${s.score}</td></tr>`;
+    cards.innerHTML+=`<div class="card" onclick="openSheet(${i})"><b>${s.name}</b><br>${s.desc}<br>Score ${s.score}</div>`;
+  });
+  window._rows=rowsData;
+  statusMsg.textContent="Ready";
+}
+function openSheet(i){
+  const s=_rows[i];
+  sheetTitle.textContent=s.name;
+  sheetBody.innerHTML=s.pubs.map(p=>{
+    const g=`https://www.google.com/maps/dir/?api=1&origin=${s.lat},${s.lon}&destination=${p.lat},${p.lon}&travelmode=walking`;
+    return `<div class="pub"><b>${p.name}</b><div class="links"><a class="pill" target="_blank" href="${g}">Directions</a></div></div>`;
+  }).join("");
+  sheet.classList.add("open");
+}
+function closeSheet(){sheet.classList.remove("open")}
+refreshBtn.onclick=build;
+locBtn.onclick=()=>navigator.geolocation?.getCurrentPosition(p=>{state.myPos=p.coords;build()});
+lineFilter.onchange=build;
+build();
+</script>
+</body>
+</html>
