@@ -94,24 +94,32 @@ button:disabled{opacity:.6}
   border-radius:8px;
   border:1px solid var(--line);
 }
+.verdict{
+  margin-top:12px;
+  padding:10px;
+  border-radius:12px;
+  background:#f7f8fd;
+  border:1px dashed var(--line);
+}
 </style>
 </head>
 
 <body>
 <header>
   <h1>Best Tube Station To Be Delayed At</h1>
-  <div class="sub">Find the nearest station, the nearest pub, and the nearest Spoons.</div>
+  <div class="sub">Nearest station. Nearest pub. Nearest Spoons. Brutal honesty.</div>
 </header>
 
 <div class="wrap">
   <div>
     <div class="card">
       <div class="row">
-        <input id="postcode" placeholder="Postcode e.g. SW1A 1AA" class="grow">
+        <input id="postcode" placeholder="Postcode (optional)" class="grow">
         <button id="go">Go</button>
       </div>
+
       <div id="chips" class="row" style="margin-top:10px"></div>
-      <div id="info" class="small" style="margin-top:10px"></div>
+      <div id="verdict" class="verdict small"></div>
 
       <div id="closestPub" class="pub"></div>
       <div id="closestSpoons" class="pub"></div>
@@ -122,19 +130,17 @@ button:disabled{opacity:.6}
 </div>
 
 <script>
-/* ---------------- helpers ---------------- */
-const PROXY=u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`;
+/* ---------------- config ---------------- */
+const PROXY = url =>
+  `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
 
 async function fetchJson(url){
-  try{
-    const r=await fetch(url);
-    if(r.ok) return await r.json();
-  }catch{}
-  const r=await fetch(PROXY(url));
+  const r = await fetch(PROXY(url));
   if(!r.ok) throw new Error("Network error");
   return await r.json();
 }
 
+/* ---------------- helpers ---------------- */
 const R=6371000;
 const toRad=x=>x*Math.PI/180;
 const dist=(a,b,c,d)=>{
@@ -151,40 +157,61 @@ const map=L.map("map").setView([51.5074,-0.1278],12);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 const markers=L.layerGroup().addTo(map);
 
+/* ---------------- funny bits ---------------- */
+const EXCUSES=[
+  "Signal failure. Emotionally unavailable train.",
+  "Waiting for a train that spiritually isn’t coming.",
+  "Minor delays due to vibes.",
+  "Trespasser on the line (it was probably a fox).",
+  "Train cancelled because it sensed weakness."
+];
+function verdictText(pubDist, hasSpoons){
+  if(pubDist < 200) return "🟢 Yes. Sit down immediately.";
+  if(pubDist < 500) return "🟠 One pint, then reassess life.";
+  if(hasSpoons) return "🟠 It’s a Spoons. You know the rules.";
+  return "🔴 This delay is not pub-worthy.";
+}
+
 /* ---------------- main ---------------- */
 async function run(){
   markers.clearLayers();
-  chips.innerHTML="";
-  info.innerHTML="";
+  chips.innerHTML="⏳ Working out how bad this is…";
   closestPub.innerHTML="";
   closestSpoons.innerHTML="";
+  verdict.innerHTML="";
+
+  let lat, lon;
 
   const pc=postcode.value.trim();
-  if(!pc) return;
-
-  chips.appendChild(chip("📍 Locating postcode…"));
-
-  const geo=await fetchJson(`https://api.postcodes.io/postcodes/${pc}`);
-  const {latitude,longitude,postcode:p}=geo.result;
+  if(pc){
+    const geo=await fetchJson(`https://api.postcodes.io/postcodes/${pc}`);
+    lat=geo.result.latitude;
+    lon=geo.result.longitude;
+  }else{
+    const pos = await new Promise((res,rej)=>
+      navigator.geolocation.getCurrentPosition(res,rej)
+    );
+    lat=pos.coords.latitude;
+    lon=pos.coords.longitude;
+  }
 
   const sp=await fetchJson(
-    `https://api.tfl.gov.uk/StopPoint?lat=${latitude}&lon=${longitude}&radius=1200&stopTypes=NaptanMetroStation`
+    `https://api.tfl.gov.uk/StopPoint?lat=${lat}&lon=${lon}&radius=1200&stopTypes=NaptanMetroStation`
   );
   const st=sp.stopPoints
-    .map(s=>({...s,d:dist(latitude,longitude,s.lat,s.lon)}))
+    .map(s=>({...s,d:dist(lat,lon,s.lat,s.lon)}))
     .sort((a,b)=>a.d-b.d)[0];
 
   chips.innerHTML="";
   chips.append(
-    chip(`🚇 ${st.commonName}`),
-    chip(`📍 ${p}`)
+    pill(`🚇 ${st.commonName}`)
   );
 
   const over=await fetchJson(
     `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(`
       [out:json][timeout:10];
       node["amenity"="pub"](around:900,${st.lat},${st.lon});
-      out tags center 25;
+      out tags center 20;
     `)}`
   );
 
@@ -200,40 +227,42 @@ async function run(){
   const pub=pubs[0];
   const spoons=pubs.find(p=>isSpoons(p.name));
 
-  markers.addLayer(L.marker([latitude,longitude]).bindPopup("Postcode"));
+  markers.addLayer(L.marker([lat,lon]).bindPopup("You"));
   markers.addLayer(L.marker([st.lat,st.lon]).bindPopup(st.commonName));
 
   if(pub){
     markers.addLayer(L.marker([pub.lat,pub.lon]).bindPopup(pub.name));
-    closestPub.innerHTML=renderPub("Closest pub",pub,st,{latitude,longitude});
+    closestPub.innerHTML=renderPub("Closest pub",pub,st,lat,lon);
   }
-
   if(spoons){
     markers.addLayer(L.marker([spoons.lat,spoons.lon]).bindPopup(spoons.name));
-    closestSpoons.innerHTML=renderPub("Closest Wetherspoons",spoons,st,{latitude,longitude});
+    closestSpoons.innerHTML=renderPub("Closest Wetherspoons",spoons,st,lat,lon);
   }
+
+  verdict.innerHTML=`
+    <b>${verdictText(pub?.d||9999,!!spoons)}</b><br>
+    ${EXCUSES[Math.floor(Math.random()*EXCUSES.length)]}
+  `;
 
   map.fitBounds(markers.getBounds().pad(0.3));
 }
 
-function renderPub(title,pub,st,user){
+function renderPub(title,pub,st,lat,lon){
   const dirS=`https://www.google.com/maps/dir/?api=1&origin=${st.lat},${st.lon}&destination=${pub.lat},${pub.lon}&travelmode=walking`;
-  const dirU=`https://www.google.com/maps/dir/?api=1&origin=${user.latitude},${user.longitude}&destination=${pub.lat},${pub.lon}&travelmode=walking`;
+  const dirU=`https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${pub.lat},${pub.lon}&travelmode=walking`;
   const open=`https://www.google.com/maps/search/?api=1&query=${pub.lat},${pub.lon}`;
-
   return `
     <b>${title}</b><br>
     <b>${pub.name}</b><br>
     <span class="small">${m(pub.d)} from station</span>
     <div class="row" style="margin-top:6px">
       <a href="${dirS}" target="_blank">🚶 Station → Pub</a>
-      <a href="${dirU}" target="_blank">🚶 Postcode → Pub</a>
+      <a href="${dirU}" target="_blank">🚶 You → Pub</a>
       <a href="${open}" target="_blank">📍 Maps</a>
     </div>
   `;
 }
-
-function chip(t){
+function pill(t){
   const s=document.createElement("span");
   s.className="pill";
   s.textContent=t;
