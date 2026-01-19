@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Best Tube Station To Be Delayed At</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -10,173 +10,211 @@
 
 <style>
 :root{
-  --tfl-blue:#0019a8;
-  --tfl-red:#da291c;
-  --ink:#0b0f1a;
+  --blue:#0019a8;
+  --red:#da291c;
   --bg:#f3f5fb;
-  --card:#ffffff;
-  --line:#e6e8f2;
-  --muted:#5a647a;
-  --shadow:0 10px 30px rgba(0,0,0,.06);
-  --radius:18px;
+  --card:#fff;
+  --line:#e3e6f2;
+  --muted:#5f6b85;
+  --ok:#177245;
+  --warn:#b55a00;
+  --bad:#b00020;
 }
 *{box-sizing:border-box}
 body{
   margin:0;
-  background:
-    radial-gradient(1200px 600px at 15% -10%, rgba(0,25,168,.12), transparent 60%),
-    radial-gradient(900px 500px at 85% 0%, rgba(218,41,28,.12), transparent 60%),
-    linear-gradient(180deg,#fff 0%,var(--bg) 55%);
   font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
-  color:var(--ink);
+  background:linear-gradient(180deg,#fff,var(--bg));
 }
 header{
-  position:sticky;top:0;z-index:10;
-  background:rgba(255,255,255,.9);
-  backdrop-filter:blur(10px);
+  background:#fff;
   border-bottom:1px solid var(--line);
-}
-.top{
-  max-width:1200px;margin:auto;padding:14px 16px;
-  display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap;
-}
-.brand{display:flex;gap:14px;align-items:center}
-.roundel{
-  width:54px;height:54px;border-radius:999px;background:var(--tfl-red);position:relative;
-}
-.roundel:before{
-  content:"";position:absolute;inset:10px;background:#fff;border-radius:999px;
-}
-.roundel:after{
-  content:"";position:absolute;left:9px;right:9px;top:50%;height:12px;
-  transform:translateY(-50%);background:var(--tfl-blue);
+  padding:14px;
 }
 h1{margin:0;font-size:18px}
-.sub{margin:4px 0 0;color:var(--muted);font-size:13px}
+.sub{font-size:13px;color:var(--muted)}
 
-.shell{
-  max-width:1200px;margin:auto;padding:14px 16px;
-  display:grid;grid-template-columns:420px 1fr;gap:14px;
+.wrap{
+  max-width:1200px;
+  margin:auto;
+  padding:14px;
+  display:grid;
+  grid-template-columns:420px 1fr;
+  gap:14px;
 }
-@media(max-width:980px){
-  .shell{grid-template-columns:1fr}
-  #map{height:52vh!important}
+@media(max-width:900px){
+  .wrap{grid-template-columns:1fr}
+  #map{height:50vh}
 }
 
 .card{
   background:var(--card);
   border:1px solid var(--line);
-  border-radius:var(--radius);
-  box-shadow:var(--shadow);
-  overflow:hidden;
+  border-radius:16px;
+  padding:14px;
 }
-.cardHead{padding:14px;border-bottom:1px solid var(--line)}
-.cardBody{padding:14px}
-
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .grow{flex:1}
-
-input{
-  width:100%;padding:12px;border-radius:14px;border:1px solid #d6daea;
-  font-size:15px;
+input,button{
+  padding:12px;
+  border-radius:12px;
+  border:1px solid var(--line);
+  font-size:14px;
 }
 button{
-  padding:12px 14px;border-radius:14px;border:none;
-  background:linear-gradient(90deg,var(--tfl-blue),var(--tfl-red));
-  color:#fff;font-weight:700;cursor:pointer;
+  background:linear-gradient(90deg,var(--blue),var(--red));
+  color:#fff;
+  font-weight:700;
+  cursor:pointer;
 }
 button:disabled{opacity:.6}
 
 .pill{
-  padding:6px 10px;border-radius:999px;border:1px solid var(--line);
-  background:#fff;font-size:12px;color:var(--muted);
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid var(--line);
+  background:#fff;
+  font-size:12px;
 }
+.small{font-size:12px;color:var(--muted)}
 
 #map{
   height:calc(100vh - 120px);
-  border-radius:var(--radius);
+  border-radius:16px;
   border:1px solid var(--line);
 }
 
 .pub{
   border-top:1px solid var(--line);
-  padding-top:10px;margin-top:10px;
+  padding-top:10px;
+  margin-top:10px;
 }
 .pub a{
-  text-decoration:none;font-size:12px;padding:6px 8px;
-  border-radius:8px;border:1px solid var(--line);
+  text-decoration:none;
+  font-size:12px;
+  padding:6px 8px;
+  border-radius:8px;
+  border:1px solid var(--line);
 }
-.small{font-size:12px;color:var(--muted)}
+
+.statusList{
+  margin-top:14px;
+  border:1px solid var(--line);
+  border-radius:14px;
+  overflow:hidden;
+}
+.statusRow{
+  padding:10px 12px;
+  border-bottom:1px solid var(--line);
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+}
+.statusRow:last-child{border-bottom:0}
+.badge{
+  padding:4px 8px;
+  border-radius:999px;
+  font-size:12px;
+}
+.sevOK{background:#e7f6ee;color:var(--ok)}
+.sevWarn{background:#fff2e0;color:var(--warn)}
+.sevBad{background:#fde7ea;color:var(--bad)}
 </style>
 </head>
 
 <body>
 <header>
-  <div class="top">
-    <div class="brand">
-      <div class="roundel"></div>
-      <div>
-        <h1>Best Tube Station To Be Delayed At</h1>
-        <div class="sub">Nearest station, best pubs, full Tube chaos.</div>
-      </div>
-    </div>
-  </div>
+  <h1>Best Tube Station To Be Delayed At</h1>
+  <div class="sub">Tube delays + best pubs nearby</div>
 </header>
 
-<main class="shell">
-<section class="card">
-  <div class="cardHead">
-    <div class="row">
-      <div class="grow">
-        <input id="postcode" placeholder="Postcode e.g. SW1A 1AA">
+<div class="wrap">
+  <div>
+    <div class="card">
+      <div class="row">
+        <input id="postcode" placeholder="Postcode e.g. SW1A 1AA" class="grow">
+        <button id="go">Go</button>
       </div>
-      <button id="go">Find my delay pub</button>
+      <div id="chips" class="row" style="margin-top:10px"></div>
+      <div id="info" class="small" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card">
+      <b>Top 5 pubs</b>
+      <div id="pubList"></div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <b>Tube line status</b>
+        <button id="refreshStatus" style="padding:8px 10px;font-size:12px">Refresh</button>
+      </div>
+      <div id="statusList" class="statusList"></div>
     </div>
   </div>
 
-  <div class="cardBody">
-    <div id="chips" class="row"></div>
-    <div id="info" class="small" style="margin-top:10px"></div>
-
-    <h3 style="margin-top:18px">Top 5 pubs</h3>
-    <div id="pubList"></div>
-  </div>
-</section>
-
-<section id="map"></section>
-</main>
+  <div id="map"></div>
+</div>
 
 <script>
+/* ---------- helpers ---------- */
 const PROXIES=[
   u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
   u=>`https://corsproxy.io/?${encodeURIComponent(u)}`
 ];
-
 async function fetchJson(url){
   for(const p of [u=>u,...PROXIES]){
-    try{
-      const r=await fetch(p(url));
-      if(r.ok) return await r.json();
-    }catch{}
+    try{const r=await fetch(p(url));if(r.ok)return await r.json();}catch{}
   }
-  throw new Error("Network error");
+  throw new Error("Fetch failed");
 }
-
-const map=L.map("map").setView([51.5074,-0.1278],12);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
-const markers=L.layerGroup().addTo(map);
-
 const R=6371000;
+const toRad=x=>x*Math.PI/180;
 const dist=(a,b,c,d)=>{
-  const toRad=x=>x*Math.PI/180;
   const dLat=toRad(c-a),dLon=toRad(d-b);
   const x=Math.sin(dLat/2)**2+
     Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dLon/2)**2;
   return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 };
-const m=x=>x<1000?`${Math.round(x)} m`:`${(x/1000).toFixed(2)} km`;
+const m=x=>x<1000?`${Math.round(x)}m`:`${(x/1000).toFixed(2)}km`;
 const isSpoons=n=>(n||"").toLowerCase().includes("wetherspoon");
 
+/* ---------- map ---------- */
+const map=L.map("map").setView([51.5074,-0.1278],12);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+const markers=L.layerGroup().addTo(map);
+
+/* ---------- tube status ---------- */
+function sev(desc=""){
+  const d=desc.toLowerCase();
+  if(d.includes("good"))return"sevOK";
+  if(d.includes("minor")||d.includes("part"))return"sevWarn";
+  return"sevBad";
+}
+async function loadTubeStatus(){
+  const host=document.getElementById("statusList");
+  host.innerHTML="";
+  try{
+    const data=await fetchJson("https://api.tfl.gov.uk/Line/Mode/tube/Status");
+    data.forEach(l=>{
+      const s=l.lineStatuses?.[0];
+      const d=s?.statusSeverityDescription||"Unknown";
+      host.insertAdjacentHTML("beforeend",`
+        <div class="statusRow">
+          <div>
+            <b>${l.name}</b>
+            <div class="small">${s?.reason||""}</div>
+          </div>
+          <div class="badge ${sev(d)}">${d}</div>
+        </div>
+      `);
+    });
+  }catch{
+    host.innerHTML=`<div class="statusRow"><b>Error loading status</b></div>`;
+  }
+}
+
+/* ---------- main ---------- */
 async function run(){
   markers.clearLayers();
   pubList.innerHTML="";
@@ -187,7 +225,7 @@ async function run(){
   if(!pc) return;
 
   const geo=await fetchJson(`https://api.postcodes.io/postcodes/${pc}`);
-  const {latitude,longitude,postcode:p}=geo.result;
+  const {latitude,longitude}=geo.result;
 
   const sp=await fetchJson(
     `https://api.tfl.gov.uk/StopPoint?lat=${latitude}&lon=${longitude}&radius=1500&stopTypes=NaptanMetroStation`
@@ -237,7 +275,6 @@ async function run(){
     const dirS=`https://www.google.com/maps/dir/?api=1&origin=${st.lat},${st.lon}&destination=${p.lat},${p.lon}&travelmode=walking`;
     const dirU=`https://www.google.com/maps/dir/?api=1&origin=${latitude},${longitude}&destination=${p.lat},${p.lon}&travelmode=walking`;
     const open=`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`;
-
     pubList.insertAdjacentHTML("beforeend",`
       <div class="pub">
         <b>${i+1}. ${p.name}</b><br>
@@ -255,15 +292,18 @@ async function run(){
   map.fitBounds(markers.getBounds().pad(0.25));
 }
 
+/* ---------- wiring ---------- */
+go.onclick=run;
+postcode.addEventListener("keydown",e=>e.key==="Enter"&&run());
+refreshStatus.onclick=loadTubeStatus;
+loadTubeStatus();
+
 function chip(t){
   const s=document.createElement("span");
   s.className="pill";
   s.textContent=t;
   return s;
 }
-
-go.onclick=run;
-postcode.addEventListener("keydown",e=>e.key==="Enter"&&run());
 </script>
 </body>
 </html>
