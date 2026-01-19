@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Where Am I? Tube Delays + Closest Pub + Wetherspoons</title>
+  <title>Tube delays + pubs + Wetherspoons + pub crawl + weather</title>
 
   <!-- Leaflet (map) -->
   <link
@@ -32,13 +32,15 @@
     }
     h1 { margin: 0 0 8px; font-size: 18px; }
     .sub { opacity: .8; font-size: 13px; margin: 0 0 12px; }
+
     .controls {
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
       margin: 8px 0 0;
+      align-items: center;
     }
-    button {
+    button, select, input[type="number"] {
       padding: 10px 12px;
       border-radius: 10px;
       border: 1px solid rgba(127,127,127,.35);
@@ -46,6 +48,7 @@
       cursor: pointer;
       font-weight: 600;
     }
+    input[type="checkbox"] { transform: scale(1.1); }
     button:disabled { opacity: .5; cursor: not-allowed; }
     main {
       display: grid;
@@ -53,14 +56,14 @@
       gap: 12px;
       padding: 12px 16px 16px;
     }
-    #map { height: 70vh; min-height: 420px; border-radius: 14px; overflow: hidden; }
+    #map { height: 72vh; min-height: 440px; border-radius: 14px; overflow: hidden; }
     .panel {
       border: 1px solid rgba(127,127,127,.25);
       border-radius: 14px;
       padding: 12px;
       background: rgba(127,127,127,.06);
       overflow: auto;
-      max-height: 70vh;
+      max-height: 72vh;
     }
     .card {
       border: 1px solid rgba(127,127,127,.25);
@@ -69,24 +72,73 @@
       margin: 10px 0;
       background: rgba(127,127,127,.06);
     }
-    .row { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .row { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center; }
     .muted { opacity: .8; font-size: 13px; }
-    .ok { color: #1b8f3a; font-weight: 700; }
-    .bad { color: #c0352b; font-weight: 800; }
-    .warn { color: #b97a00; font-weight: 800; }
+    .ok { color: #1b8f3a; font-weight: 800; }
+    .bad { color: #c0352b; font-weight: 900; }
+    .warn { color: #b97a00; font-weight: 900; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(127,127,127,.35);
+      background: rgba(127,127,127,.10);
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .pill.ok { border-color: rgba(27,143,58,.5); }
+    .pill.bad { border-color: rgba(192,53,43,.5); }
+    .pill.warn { border-color: rgba(185,122,0,.5); }
+
     a { color: inherit; }
     code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+
+    .list {
+      margin: 8px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .list li {
+      padding: 8px 0;
+      border-top: 1px solid rgba(127,127,127,.18);
+    }
+    .list li:first-child { border-top: 0; }
+    .small { font-size: 12px; opacity: .85; }
+    .kpi { font-weight: 900; }
+
+    .filters {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .filters label {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 8px 10px;
+      border-radius: 12px;
+      border: 1px solid rgba(127,127,127,.22);
+      background: rgba(127,127,127,.06);
+      user-select: none;
+    }
+    .filters .wide { grid-column: 1 / -1; }
+
     @media (max-width: 900px) {
       main { grid-template-columns: 1fr; }
       #map, .panel { max-height: none; height: 55vh; }
+      .filters { grid-template-columns: 1fr; }
     }
   </style>
 </head>
+
 <body>
   <header>
-    <h1>Tube delays + closest pub + closest Wetherspoons</h1>
+    <h1>Tube delays + closest pub + closest Wetherspoons + pub crawl + weather</h1>
     <p class="sub">
-      Uses your device location (with permission), TfL line status, and OpenStreetMap to find nearby pubs.
+      Uses your device location (with permission), TfL line status, OpenStreetMap (Overpass) for places, and Open-Meteo for weather.
     </p>
 
     <div class="controls">
@@ -94,6 +146,8 @@
       <button id="btnRefresh" disabled>🔄 Refresh all</button>
       <button id="btnFollow" disabled>🧭 Follow me (watch)</button>
       <button id="btnStopWatch" disabled>🛑 Stop watch</button>
+
+      <span class="muted" style="margin-left:auto"></span>
     </div>
 
     <p id="status" class="muted" style="margin: 10px 0 0;"></p>
@@ -112,8 +166,61 @@
       </div>
 
       <div class="card">
-        <strong>Closest places</strong>
-        <div id="closestResults" class="muted" style="margin-top: 8px;">—</div>
+        <div class="row">
+          <strong>Weather</strong>
+          <span id="wxUpdated" class="muted">—</span>
+        </div>
+        <div class="row" style="margin-top: 8px;">
+          <div id="wxSummary" class="muted">—</div>
+          <div id="beerGardenBadge"></div>
+        </div>
+        <div id="wxDetails" class="muted small" style="margin-top: 6px;">—</div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <strong>Places</strong>
+          <span class="muted" id="placesMeta">—</span>
+        </div>
+
+        <div class="filters">
+          <label><input type="checkbox" id="f_pub" checked /> Pub</label>
+          <label><input type="checkbox" id="f_bar" checked /> Bar</label>
+
+          <label><input type="checkbox" id="f_beergarden" /> Beer garden</label>
+          <label><input type="checkbox" id="f_realale" /> Real ale (CAMRA-ish)</label>
+
+          <label><input type="checkbox" id="f_food" /> Food</label>
+          <label><input type="checkbox" id="f_latelicense" /> Late licence (best effort)</label>
+
+          <label class="wide">
+            Radius:
+            <input type="number" id="radiusMeters" min="300" max="5000" step="100" value="1500" />
+            <span class="muted">meters</span>
+          </label>
+        </div>
+
+        <div class="controls" style="margin-top: 10px;">
+          <button id="btnApplyFilters" disabled>🎛️ Apply filters</button>
+          <button id="btnPubCrawl" disabled>🍻 Generate pub crawl</button>
+          <select id="crawlCount" disabled>
+            <option value="3">3 stops</option>
+            <option value="4" selected>4 stops</option>
+            <option value="5">5 stops</option>
+          </select>
+        </div>
+
+        <div id="closestResults" class="muted" style="margin-top: 10px;">—</div>
+
+        <div style="margin-top: 10px;">
+          <strong>Nearby list (top 10)</strong>
+          <ul id="nearbyList" class="list muted"></ul>
+        </div>
+
+        <div style="margin-top: 10px;">
+          <strong>Pub crawl</strong>
+          <div id="crawlResults" class="muted" style="margin-top: 8px;">—</div>
+        </div>
       </div>
 
       <div class="card">
@@ -125,27 +232,25 @@
       </div>
 
       <div class="card">
-        <strong>Debug</strong>
-        <div class="muted">
-          If geolocation doesn’t work, ensure you’re on <code>https://</code> or <code>http://localhost</code>.
-          If pubs fail, Overpass may be rate-limiting; wait ~30 seconds and refresh.
+        <strong>Debug / reliability</strong>
+        <div class="muted" style="margin-top: 6px;">
+          Geolocation requires <code>https://</code> (or <code>http://localhost</code>).<br/>
+          Pub data comes from Overpass (often rate-limited). This app uses fallback servers + caching, so “closest pub” still works even if Overpass is busy.
         </div>
       </div>
     </div>
   </main>
 
   <script>
-    // ---------------------------
+    // =========================================================
     // Helpers
-    // ---------------------------
+    // =========================================================
     const $ = (id) => document.getElementById(id);
 
-    function setStatus(msg) {
-      $("status").textContent = msg;
-    }
+    function setStatus(msg) { $("status").textContent = msg; }
 
     function haversineMeters(lat1, lon1, lat2, lon2) {
-      const R = 6371000; // meters
+      const R = 6371000;
       const toRad = (d) => d * Math.PI / 180;
       const dLat = toRad(lat2 - lat1);
       const dLon = toRad(lon2 - lon1);
@@ -157,22 +262,46 @@
     }
 
     function fmtDistance(m) {
+      if (!isFinite(m)) return "—";
       if (m < 1000) return `${Math.round(m)} m`;
       return `${(m / 1000).toFixed(2)} km`;
     }
 
-    function directionsLink(lat, lon) {
+    function safeText(v) { return (v === null || v === undefined || v === "") ? "—" : String(v); }
+
+    function googleDirectionsLinkSingle(lat, lon) {
+      // Walking directions from current location to destination
       return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lat + "," + lon)}&travelmode=walking`;
     }
 
-    function safeText(v) {
-      return (v === null || v === undefined || v === "") ? "—" : String(v);
+    function googleDirectionsLinkWithWaypoints(originLat, originLon, stops) {
+      // Google supports "waypoints" (pipe-separated). There are practical limits; we keep it small (<= 5).
+      // Route: origin -> ...waypoints... -> destination (last stop).
+      if (!stops || stops.length < 2) return googleDirectionsLinkSingle(stops?.[0]?.lat, stops?.[0]?.lon);
+
+      const origin = `${originLat},${originLon}`;
+      const destination = `${stops[stops.length - 1].lat},${stops[stops.length - 1].lon}`;
+      const middle = stops.slice(0, -1).map(s => `${s.lat},${s.lon}`).join("|");
+
+      const params = new URLSearchParams({
+        api: "1",
+        origin,
+        destination,
+        travelmode: "walking",
+        waypoints: middle
+      });
+
+      return `https://www.google.com/maps/dir/?${params.toString()}`;
     }
 
-    // ---------------------------
-    // Map setup
-    // ---------------------------
-    const map = L.map("map").setView([51.5074, -0.1278], 12); // default London
+    function pill(text, cls) {
+      return `<span class="pill ${cls}">${text}</span>`;
+    }
+
+    // =========================================================
+    // Map
+    // =========================================================
+    const map = L.map("map").setView([51.5074, -0.1278], 12);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap contributors'
@@ -181,17 +310,38 @@
     let meMarker = null;
     let pubMarker = null;
     let spoonsMarker = null;
+    let placesMarkers = []; // pins for list/crawl
     let watchId = null;
+
+    function clearMarkers(list) {
+      for (const m of list) map.removeLayer(m);
+      list.length = 0;
+    }
 
     function putMarker(existing, lat, lon, label) {
       if (existing) map.removeLayer(existing);
-      const m = L.marker([lat, lon]).addTo(map).bindPopup(label);
-      return m;
+      return L.marker([lat, lon]).addTo(map).bindPopup(label);
     }
 
-    // ---------------------------
-    // Data fetchers
-    // ---------------------------
+    // =========================================================
+    // State
+    // =========================================================
+    let lastLat = null;
+    let lastLon = null;
+    let lastAcc = null;
+
+    let lastPlacesFetchAt = 0; // throttle Overpass calls
+    const PLACES_COOLDOWN_MS = 20000; // a bit less strict than 30s + caching helps
+    const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+    // We cache raw elements and re-filter client-side
+    let placesRaw = []; // normalized list of places (pubs/bars) near you
+    let placesSource = "—"; // "live" or "cache"
+    let placesFetchedAt = 0;
+
+    // =========================================================
+    // Networking
+    // =========================================================
     async function reverseGeocode(lat, lon) {
       const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
       const res = await fetch(url, { headers: { "Accept": "application/json" } });
@@ -206,10 +356,22 @@
       return await res.json();
     }
 
-    // IMPORTANT: Overpass is often rate-limited. We:
-    // - try multiple endpoints
-    // - enforce a timeout
-    // - show a friendly error when all fail
+    async function fetchWeather(lat, lon) {
+      // Open-Meteo: no key needed
+      // We pull current weather and next few hours precip/wind/temp.
+      const url = new URL("https://api.open-meteo.com/v1/forecast");
+      url.searchParams.set("latitude", lat);
+      url.searchParams.set("longitude", lon);
+      url.searchParams.set("current", "temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m");
+      url.searchParams.set("hourly", "precipitation,temperature_2m,wind_speed_10m");
+      url.searchParams.set("forecast_hours", "6");
+      url.searchParams.set("timezone", "auto");
+
+      const res = await fetch(url.toString(), { headers: { "Accept": "application/json" } });
+      if (!res.ok) throw new Error(`Weather failed: ${res.status}`);
+      return await res.json();
+    }
+
     async function overpassQuery(query) {
       const endpoints = [
         "https://overpass-api.de/api/interpreter",
@@ -237,7 +399,7 @@
 
           if (!res.ok) {
             const msg = await res.text().catch(() => "");
-            throw new Error(`Overpass ${res.status} from ${url}${msg ? " — " + msg.slice(0, 120) : ""}`);
+            throw new Error(`Overpass ${res.status} from ${url}${msg ? " — " + msg.slice(0, 140) : ""}`);
           }
 
           return await res.json();
@@ -247,29 +409,33 @@
           console.warn("Overpass failed, trying next endpoint:", url, e);
         }
       }
-
       throw lastErr || new Error("All Overpass endpoints failed.");
     }
 
-    async function findNearbyPubs(lat, lon) {
-      // Smaller radius reduces timeouts and payload sizes
-      const radius = 1500;
-
-      const q = `
+    // =========================================================
+    // Overpass: fetch pubs/bars + Wetherspoons candidates
+    // FIXING "closest pub issue":
+    //  - smaller radius default (user adjustable)
+    //  - caching in localStorage
+    //  - if Overpass fails, we fall back to cached results
+    //  - we fetch both pubs and bars so filters can work without requery
+    // =========================================================
+    function buildPlacesOverpassQuery(lat, lon, radius) {
+      // Grab pubs + bars, plus basic tags used for filters.
+      // Note: "out center tags;" gives center for ways/relations.
+      return `
 [out:json][timeout:25];
 (
   node(around:${radius},${lat},${lon})["amenity"="pub"];
   way(around:${radius},${lat},${lon})["amenity"="pub"];
   relation(around:${radius},${lat},${lon})["amenity"="pub"];
 
-  node(around:${radius},${lat},${lon})["name"~"wetherspoon|jd wetherspoon|wetherspoons","i"];
-  way(around:${radius},${lat},${lon})["name"~"wetherspoon|jd wetherspoon|wetherspoons","i"];
-  relation(around:${radius},${lat},${lon})["name"~"wetherspoon|jd wetherspoon|wetherspoons","i"];
+  node(around:${radius},${lat},${lon})["amenity"="bar"];
+  way(around:${radius},${lat},${lon})["amenity"="bar"];
+  relation(around:${radius},${lat},${lon})["amenity"="bar"];
 );
 out center tags;
       `.trim();
-
-      return await overpassQuery(q);
     }
 
     function extractElementLatLon(el) {
@@ -278,40 +444,181 @@ out center tags;
       return null;
     }
 
-    function pickClosest(elements, lat, lon, predicateFn) {
-      let best = null;
-
-      for (const el of elements) {
-        const pos = extractElementLatLon(el);
-        if (!pos) continue;
-
-        const tags = el.tags || {};
-        if (predicateFn && !predicateFn(tags)) continue;
-
-        const d = haversineMeters(lat, lon, pos.lat, pos.lon);
-        if (!best || d < best.distanceMeters) {
-          best = {
-            id: `${el.type}/${el.id}`,
-            name: tags.name || tags.brand || "Unnamed place",
-            lat: pos.lat,
-            lon: pos.lon,
-            distanceMeters: d,
-            tags
-          };
-        }
-      }
-      return best;
+    function normalizePlace(el) {
+      const pos = extractElementLatLon(el);
+      if (!pos) return null;
+      const tags = el.tags || {};
+      const amenity = tags.amenity || "";
+      const name = tags.name || tags.brand || tags.operator || "Unnamed place";
+      return {
+        id: `${el.type}/${el.id}`,
+        lat: pos.lat,
+        lon: pos.lon,
+        name,
+        amenity,
+        tags
+      };
     }
 
-    // ---------------------------
-    // Renderers
-    // ---------------------------
+    function loadPlacesCache(cacheKey) {
+      try {
+        const raw = localStorage.getItem(cacheKey);
+        if (!raw) return null;
+        const obj = JSON.parse(raw);
+        if (!obj || !obj.places || !obj.fetchedAt) return null;
+        if ((Date.now() - obj.fetchedAt) > CACHE_TTL_MS) return null;
+        return obj;
+      } catch {
+        return null;
+      }
+    }
+
+    function savePlacesCache(cacheKey, obj) {
+      try { localStorage.setItem(cacheKey, JSON.stringify(obj)); } catch {}
+    }
+
+    async function fetchPlacesWithCache(lat, lon, radius) {
+      const cacheKey = `places_cache_v2_${Math.round(lat*1000)}_${Math.round(lon*1000)}_${radius}`;
+      const cached = loadPlacesCache(cacheKey);
+
+      const now = Date.now();
+      const allowNetwork = (now - lastPlacesFetchAt) > PLACES_COOLDOWN_MS;
+
+      // Prefer fresh cache immediately (fast UI), then refresh in background if allowed
+      if (cached) {
+        placesRaw = cached.places;
+        placesFetchedAt = cached.fetchedAt;
+        placesSource = "cache";
+        updatePlacesMeta();
+      }
+
+      if (!allowNetwork) {
+        if (cached) return { source: "cache", usedCache: true, refreshed: false };
+        // no cache + cooldown: wait until cooldown passes
+        const waitMs = PLACES_COOLDOWN_MS - (now - lastPlacesFetchAt);
+        throw new Error(`Throttled: wait ${Math.ceil(waitMs/1000)}s (no cache available).`);
+      }
+
+      lastPlacesFetchAt = now;
+
+      const query = buildPlacesOverpassQuery(lat, lon, radius);
+      const data = await overpassQuery(query);
+      const els = (data.elements || []).map(normalizePlace).filter(Boolean);
+
+      // de-duplicate by id
+      const uniq = new Map();
+      for (const p of els) uniq.set(p.id, p);
+
+      placesRaw = [...uniq.values()];
+      placesFetchedAt = Date.now();
+      placesSource = "live";
+
+      savePlacesCache(cacheKey, { places: placesRaw, fetchedAt: placesFetchedAt });
+
+      updatePlacesMeta();
+      return { source: "live", usedCache: !!cached, refreshed: true };
+    }
+
+    // =========================================================
+    // Filters (client-side)
+    // =========================================================
+    function getFilters() {
+      return {
+        pub: $("f_pub").checked,
+        bar: $("f_bar").checked,
+        beerGarden: $("f_beergarden").checked,
+        realAle: $("f_realale").checked,
+        food: $("f_food").checked,
+        late: $("f_latelicense").checked,
+      };
+    }
+
+    function placeMatchesFilters(place, filters) {
+      const tags = place.tags || {};
+      const amenity = (place.amenity || "").toLowerCase();
+
+      const amenityOk =
+        (filters.pub && amenity === "pub") ||
+        (filters.bar && amenity === "bar");
+
+      if (!amenityOk) return false;
+
+      // Beer garden: OSM tagging varies. We treat any of these as a "yes".
+      if (filters.beerGarden) {
+        const bg =
+          (tags.beer_garden || "").toLowerCase() === "yes" ||
+          (tags["outdoor_seating"] || "").toLowerCase() === "yes" ||
+          (tags["garden"] || "").toLowerCase() === "yes";
+        if (!bg) return false;
+      }
+
+      // Real ale: best-effort (OSM has no single standard). A few common-ish tags.
+      if (filters.realAle) {
+        const ra =
+          (tags.real_ale || "").toLowerCase() === "yes" ||
+          (tags.camra || "").toLowerCase() === "yes" ||
+          (tags["drink:real_ale"] || "").toLowerCase() === "yes" ||
+          (tags["brewery"] || "").toLowerCase() === "yes";
+        if (!ra) return false;
+      }
+
+      // Food: again best-effort
+      if (filters.food) {
+        const food =
+          (tags.food || "").toLowerCase() === "yes" ||
+          (tags["cuisine"] != null) ||
+          (tags["restaurant"] || "").toLowerCase() === "yes";
+        if (!food) return false;
+      }
+
+      // Late licence: best-effort (no universal tag). Use opening_hours heuristics if present.
+      if (filters.late) {
+        const oh = (tags.opening_hours || "").toLowerCase();
+        const lateHint = /;|24\/7|00:|01:|02:|03:/.test(oh); // crude heuristic
+        if (!lateHint) return false;
+      }
+
+      return true;
+    }
+
+    function getFilteredPlaces(lat, lon) {
+      const filters = getFilters();
+      const arr = placesRaw
+        .filter(p => placeMatchesFilters(p, filters))
+        .map(p => ({
+          ...p,
+          distanceMeters: haversineMeters(lat, lon, p.lat, p.lon)
+        }))
+        .sort((a,b) => a.distanceMeters - b.distanceMeters);
+
+      return arr;
+    }
+
+    // =========================================================
+    // Wetherspoons detection
+    // =========================================================
+    function isWetherspoons(place) {
+      const t = place.tags || {};
+      const n = (t.name || place.name || "").toLowerCase();
+      const b = (t.brand || "").toLowerCase();
+      const o = (t.operator || "").toLowerCase();
+
+      return (
+        n.includes("wetherspoon") || n.includes("wetherspoons") || n.includes("jd wetherspoon") ||
+        b.includes("wetherspoon") || b.includes("wetherspoons") || b.includes("jd wetherspoon") ||
+        o.includes("wetherspoon") || o.includes("wetherspoons") || o.includes("jd wetherspoon")
+      );
+    }
+
+    // =========================================================
+    // Render: Tube
+    // =========================================================
     function renderTubeStatus(lines) {
       const mapped = lines.map(l => {
         const statuses = (l.lineStatuses || []).map(s => s.statusSeverityDescription).filter(Boolean);
         const unique = [...new Set(statuses)];
         const worst = unique.find(x => x !== "Good Service") || "Good Service";
-        return { name: l.name, status: worst, details: unique.join(", ") };
+        return { name: l.name, status: worst };
       });
 
       mapped.sort((a, b) => {
@@ -336,52 +643,312 @@ out center tags;
       $("tflUpdated").textContent = new Date().toLocaleString();
     }
 
-    function renderClosest(closestPub, closestSpoons) {
-      const parts = [];
+    // =========================================================
+    // Render: Weather + Beer garden viable badge
+    // =========================================================
+    function weatherCodeToText(code) {
+      // Minimal mapping (good enough)
+      const m = {
+        0: "Clear",
+        1: "Mainly clear",
+        2: "Partly cloudy",
+        3: "Overcast",
+        45: "Fog",
+        48: "Rime fog",
+        51: "Light drizzle",
+        53: "Drizzle",
+        55: "Heavy drizzle",
+        61: "Light rain",
+        63: "Rain",
+        65: "Heavy rain",
+        71: "Light snow",
+        73: "Snow",
+        75: "Heavy snow",
+        80: "Rain showers",
+        81: "Rain showers",
+        82: "Violent showers",
+        95: "Thunderstorm"
+      };
+      return m[code] || `Weather code ${code}`;
+    }
 
+    function renderWeather(wx) {
+      const cur = wx.current;
+      const temp = cur?.temperature_2m;
+      const feels = cur?.apparent_temperature;
+      const precipNow = cur?.precipitation;
+      const wind = cur?.wind_speed_10m;
+      const code = cur?.weather_code;
+
+      const hourly = wx.hourly || {};
+      const precipNext = (hourly.precipitation && hourly.precipitation.length) ? hourly.precipitation.slice(0, 3) : [];
+      const windNext = (hourly.wind_speed_10m && hourly.wind_speed_10m.length) ? hourly.wind_speed_10m.slice(0, 3) : [];
+      const tempNext = (hourly.temperature_2m && hourly.temperature_2m.length) ? hourly.temperature_2m.slice(0, 3) : [];
+
+      const next1hPrecip = precipNext[0] ?? 0;
+      const next2hPrecip = precipNext[1] ?? 0;
+      const next3hPrecip = precipNext[2] ?? 0;
+
+      // Beer garden viable heuristic (simple + explainable)
+      // - temp >= 15C
+      // - precip next 1h < 0.2mm
+      // - wind < 12 m/s
+      let badgeCls = "warn";
+      let badgeText = "Maybe beer garden";
+      if (temp >= 15 && next1hPrecip < 0.2 && wind < 12) {
+        badgeCls = "ok";
+        badgeText = "Beer garden viable ✅";
+      } else if (temp < 12 || next1hPrecip >= 1.0 || wind >= 15) {
+        badgeCls = "bad";
+        badgeText = "Beer garden risk ❌";
+      }
+
+      $("beerGardenBadge").innerHTML = pill(badgeText, badgeCls);
+      $("wxSummary").innerHTML =
+        `<span class="kpi">${safeText(temp)}°C</span> (feels ${safeText(feels)}°C) · ${weatherCodeToText(code)} · wind ${safeText(wind)} m/s`;
+
+      $("wxDetails").textContent =
+        `Precip now: ${safeText(precipNow)} mm · Next 1–3h precip: ${next1hPrecip}/${next2hPrecip}/${next3hPrecip} mm · Next temps: ${tempNext.join("/") || "—"} °C`;
+
+      $("wxUpdated").textContent = new Date().toLocaleString();
+    }
+
+    // =========================================================
+    // Render: Places (closest, list, markers)
+    // =========================================================
+    function updatePlacesMeta() {
+      const when = placesFetchedAt ? new Date(placesFetchedAt).toLocaleTimeString() : "—";
+      $("placesMeta").textContent = `${placesRaw.length} places · ${placesSource} · ${when}`;
+    }
+
+    function renderClosestAndList(lat, lon) {
+      const filtered = getFilteredPlaces(lat, lon);
+
+      // Closest pub (strictly pub, regardless of filters) + closest spoons (from all raw)
+      const pubsOnly = placesRaw
+        .filter(p => (p.amenity || "").toLowerCase() === "pub")
+        .map(p => ({ ...p, distanceMeters: haversineMeters(lat, lon, p.lat, p.lon) }))
+        .sort((a,b) => a.distanceMeters - b.distanceMeters);
+
+      const spoons = placesRaw
+        .filter(isWetherspoons)
+        .map(p => ({ ...p, distanceMeters: haversineMeters(lat, lon, p.lat, p.lon) }))
+        .sort((a,b) => a.distanceMeters - b.distanceMeters);
+
+      const closestPub = pubsOnly[0] || null;
+      const closestSpoons = spoons[0] || null;
+
+      // markers for closest
+      if (closestPub) pubMarker = putMarker(pubMarker, closestPub.lat, closestPub.lon, `Closest pub: ${closestPub.name}`);
+      if (closestSpoons) spoonsMarker = putMarker(spoonsMarker, closestSpoons.lat, closestSpoons.lon, `Closest Wetherspoons: ${closestSpoons.name}`);
+
+      const closestHtml = [];
       if (closestPub) {
-        parts.push(`
+        closestHtml.push(`
           <div style="margin-bottom: 10px;">
             <div><strong>Closest pub</strong>: ${safeText(closestPub.name)}</div>
             <div class="muted">Distance: ${fmtDistance(closestPub.distanceMeters)}</div>
-            <div class="muted"><a href="${directionsLink(closestPub.lat, closestPub.lon)}" target="_blank" rel="noreferrer">Walking directions</a></div>
+            <div class="muted"><a href="${googleDirectionsLinkSingle(closestPub.lat, closestPub.lon)}" target="_blank" rel="noreferrer">Google Maps walking directions</a></div>
           </div>
         `);
       } else {
-        parts.push(`<div><strong>Closest pub</strong>: —</div>`);
+        closestHtml.push(`<div><strong>Closest pub</strong>: — (no pubs returned)</div>`);
       }
 
       if (closestSpoons) {
-        parts.push(`
+        closestHtml.push(`
           <div>
             <div><strong>Closest Wetherspoons</strong>: ${safeText(closestSpoons.name)}</div>
             <div class="muted">Distance: ${fmtDistance(closestSpoons.distanceMeters)}</div>
-            <div class="muted"><a href="${directionsLink(closestSpoons.lat, closestSpoons.lon)}" target="_blank" rel="noreferrer">Walking directions</a></div>
+            <div class="muted"><a href="${googleDirectionsLinkSingle(closestSpoons.lat, closestSpoons.lon)}" target="_blank" rel="noreferrer">Google Maps walking directions</a></div>
           </div>
         `);
       } else {
-        parts.push(`<div style="margin-top: 6px;"><strong>Closest Wetherspoons</strong>: — (none found nearby)</div>`);
+        closestHtml.push(`<div style="margin-top: 6px;"><strong>Closest Wetherspoons</strong>: — (none found nearby)</div>`);
       }
 
-      $("closestResults").innerHTML = parts.join("");
+      $("closestResults").innerHTML = closestHtml.join("");
+
+      // Top 10 list from filtered
+      const top = filtered.slice(0, 10);
+      const ul = $("nearbyList");
+      ul.innerHTML = "";
+
+      clearMarkers(placesMarkers);
+
+      for (const p of top) {
+        const li = document.createElement("li");
+        const tags = p.tags || {};
+        const extras = [];
+        if ((tags.outdoor_seating || "").toLowerCase() === "yes" || (tags.beer_garden || "").toLowerCase() === "yes") extras.push("beer garden");
+        if ((tags.real_ale || "").toLowerCase() === "yes" || (tags.camra || "").toLowerCase() === "yes") extras.push("real ale");
+        if ((tags.food || "").toLowerCase() === "yes") extras.push("food");
+        if (isWetherspoons(p)) extras.push("Wetherspoons");
+
+        li.innerHTML = `
+          <div class="row">
+            <span><strong>${safeText(p.name)}</strong> <span class="muted">(${p.amenity})</span></span>
+            <span class="muted">${fmtDistance(p.distanceMeters)}</span>
+          </div>
+          <div class="small muted">
+            ${extras.length ? "Tags: " + extras.join(", ") + " · " : ""}
+            <a href="${googleDirectionsLinkSingle(p.lat, p.lon)}" target="_blank" rel="noreferrer">Directions</a>
+          </div>
+        `;
+        ul.appendChild(li);
+
+        const m = L.circleMarker([p.lat, p.lon], { radius: 6 }).addTo(map).bindPopup(`${p.name} (${p.amenity})`);
+        placesMarkers.push(m);
+      }
     }
 
-    // ---------------------------
-    // Main flow
-    // ---------------------------
-    let lastPlacesFetchAt = 0; // cooldown timer for Overpass calls
+    // =========================================================
+    // Pub crawl generator
+    // =========================================================
+    function generatePubCrawl(lat, lon, count) {
+      // Use pubs only from filtered list if pub filter enabled, else fall back to pubs-only.
+      const filters = getFilters();
+      let candidates = getFilteredPlaces(lat, lon);
 
+      // Keep only pubs/bars (already), but crawl should feel "pubby": prefer pubs
+      // We'll keep both but bias pubs first.
+      candidates.sort((a,b) => {
+        const ap = (a.amenity === "pub") ? 0 : 1;
+        const bp = (b.amenity === "pub") ? 0 : 1;
+        if (ap !== bp) return ap - bp;
+        return a.distanceMeters - b.distanceMeters;
+      });
+
+      // Need enough candidates
+      if (candidates.length < count) return null;
+
+      // Greedy chain with max hop ~900m (keeps it walkable). If too strict, it relaxes.
+      const maxHopStart = 900;
+      let maxHop = maxHopStart;
+
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const chosen = [];
+        // Start from closest
+        chosen.push(candidates[0]);
+
+        while (chosen.length < count) {
+          const last = chosen[chosen.length - 1];
+          const remaining = candidates.filter(p => !chosen.some(c => c.id === p.id));
+          let best = null;
+
+          for (const p of remaining) {
+            const hop = haversineMeters(last.lat, last.lon, p.lat, p.lon);
+            // Slight preference for pubs
+            const pubBias = (p.amenity === "pub") ? 0.85 : 1.0;
+            const score = hop * pubBias;
+
+            if (hop <= maxHop && (!best || score < best.score)) {
+              best = { place: p, score, hop };
+            }
+          }
+
+          if (!best) break;
+          chosen.push(best.place);
+        }
+
+        if (chosen.length === count) return chosen;
+        maxHop += 600; // relax
+      }
+
+      // Fallback: just take first N closest (still useful)
+      return candidates.slice(0, count);
+    }
+
+    function renderPubCrawl(lat, lon) {
+      const count = parseInt($("crawlCount").value, 10);
+      const crawl = generatePubCrawl(lat, lon, count);
+
+      if (!crawl || !crawl.length) {
+        $("crawlResults").innerHTML = "Not enough places to generate a crawl with current filters.";
+        return;
+      }
+
+      // Mark crawl stops on map
+      // (reuse placesMarkers list already for top 10; we add numbered markers separately)
+      // We'll add simple markers for crawl with popups.
+      // Clear existing crawl markers by clearing all markers and re-rendering list markers
+      // but we don't want to wipe list markers; so we add normal Leaflet markers and keep references:
+      if (!window.__crawlMarkers) window.__crawlMarkers = [];
+      clearMarkers(window.__crawlMarkers);
+
+      for (let i = 0; i < crawl.length; i++) {
+        const p = crawl[i];
+        const m = L.marker([p.lat, p.lon]).addTo(map).bindPopup(`${i+1}. ${p.name}`);
+        window.__crawlMarkers.push(m);
+      }
+
+      // Build a Google Maps multi-stop route link (origin -> ... -> last)
+      const routeLink = googleDirectionsLinkWithWaypoints(lat, lon, crawl);
+
+      // Render crawl list
+      const items = crawl.map((p, i) => {
+        const d = haversineMeters(lat, lon, p.lat, p.lon);
+        return `
+          <div style="margin: 6px 0;">
+            <div class="row">
+              <span><strong>${i+1}. ${safeText(p.name)}</strong> <span class="muted">(${p.amenity})</span></span>
+              <span class="muted">${fmtDistance(d)}</span>
+            </div>
+            <div class="small muted">
+              <a href="${googleDirectionsLinkSingle(p.lat, p.lon)}" target="_blank" rel="noreferrer">Directions to this stop</a>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      $("crawlResults").innerHTML = `
+        <div class="row" style="margin-bottom: 8px;">
+          <span>${pill("Crawl ready", "ok")}</span>
+          <a href="${routeLink}" target="_blank" rel="noreferrer"><strong>Open full crawl route in Google Maps →</strong></a>
+        </div>
+        ${items}
+      `;
+
+      // Zoom map to crawl bounds
+      const bounds = L.latLngBounds(crawl.map(p => [p.lat, p.lon]));
+      map.fitBounds(bounds.pad(0.25));
+    }
+
+    // =========================================================
+    // UI enable/disable
+    // =========================================================
+    function setPlacesUiEnabled(enabled) {
+      $("btnApplyFilters").disabled = !enabled;
+      $("btnPubCrawl").disabled = !enabled;
+      $("crawlCount").disabled = !enabled;
+    }
+
+    function wireFiltersChangeHandlers() {
+      const ids = ["f_pub","f_bar","f_beergarden","f_realale","f_food","f_latelicense","radiusMeters"];
+      for (const id of ids) {
+        $(id).addEventListener("change", () => {
+          if (lastLat != null && lastLon != null && placesRaw.length) {
+            renderClosestAndList(lastLat, lastLon);
+            $("crawlResults").textContent = "—";
+          }
+        });
+      }
+    }
+
+    // =========================================================
+    // Main refresh
+    // =========================================================
     async function refreshAll(lat, lon, accuracyMeters) {
+      lastLat = lat; lastLon = lon; lastAcc = accuracyMeters;
+
       $("btnRefresh").disabled = true;
-      setStatus("Refreshing: reverse geocode, nearby pubs, and TfL status…");
+      setStatus("Refreshing: address, weather, places, and TfL status…");
 
       $("coords").textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)}${accuracyMeters ? ` (±${Math.round(accuracyMeters)}m)` : ""}`;
-
-      // marker for you
       meMarker = putMarker(meMarker, lat, lon, "You are here");
       map.setView([lat, lon], 15);
 
-      // Reverse geocode
+      // Address
       try {
         const geo = await reverseGeocode(lat, lon);
         $("address").textContent = geo.display_name ? geo.display_name : "—";
@@ -390,46 +957,56 @@ out center tags;
         console.warn(e);
       }
 
-      // Nearby places (Overpass) - cooldown to avoid rate limit
+      // Weather
       try {
-        const now = Date.now();
-        const allowPlacesFetch = (now - lastPlacesFetchAt) > 30000; // 30s
-
-        if (!allowPlacesFetch) {
-          const wait = Math.ceil((30000 - (now - lastPlacesFetchAt)) / 1000);
-          $("closestResults").textContent = `Waiting ${wait}s before next pub lookup (avoiding Overpass rate limits)…`;
-        } else {
-          lastPlacesFetchAt = now;
-          $("closestResults").textContent = "Looking up nearby pubs…";
-
-          const data = await findNearbyPubs(lat, lon);
-          const els = data.elements || [];
-
-          const closestPub = pickClosest(els, lat, lon, (tags) => tags.amenity === "pub");
-
-          // Wetherspoons matching: name OR operator/brand hints (more robust)
-          const closestSpoons = pickClosest(els, lat, lon, (tags) => {
-            const n = (tags.name || "").toLowerCase();
-            const b = (tags.brand || "").toLowerCase();
-            const o = (tags.operator || "").toLowerCase();
-            const hit =
-              n.includes("wetherspoon") || n.includes("wetherspoons") || n.includes("jd wetherspoon") ||
-              b.includes("wetherspoon") || b.includes("wetherspoons") || b.includes("jd wetherspoon") ||
-              o.includes("wetherspoon") || o.includes("wetherspoons") || o.includes("jd wetherspoon");
-            return hit;
-          });
-
-          renderClosest(closestPub, closestSpoons);
-
-          if (closestPub) pubMarker = putMarker(pubMarker, closestPub.lat, closestPub.lon, `Closest pub: ${closestPub.name}`);
-          if (closestSpoons) spoonsMarker = putMarker(spoonsMarker, closestSpoons.lat, closestSpoons.lon, `Closest Wetherspoons: ${closestSpoons.name}`);
-        }
+        $("wxSummary").textContent = "Loading weather…";
+        const wx = await fetchWeather(lat, lon);
+        renderWeather(wx);
       } catch (e) {
-        $("closestResults").textContent = "Nearby pub search failed (Overpass busy / rate-limited). Wait ~30s and refresh.";
+        $("wxSummary").textContent = "Weather failed (network).";
+        $("wxDetails").textContent = "—";
+        $("beerGardenBadge").innerHTML = pill("Weather unavailable", "warn");
         console.warn(e);
       }
 
-      // Tube status
+      // Places (Overpass + cache)
+      try {
+        const radius = Math.max(300, Math.min(5000, parseInt($("radiusMeters").value, 10) || 1500));
+        setPlacesUiEnabled(false);
+
+        $("closestResults").textContent = "Loading places…";
+        $("nearbyList").innerHTML = "";
+        $("crawlResults").textContent = "—";
+
+        const r = await fetchPlacesWithCache(lat, lon, radius);
+        // If we showed cache first, now we will have live, but either way we render.
+        renderClosestAndList(lat, lon);
+        setPlacesUiEnabled(true);
+
+        const note = (placesSource === "cache")
+          ? "Using cached places (Overpass busy). Try Refresh for live."
+          : "Places loaded.";
+
+        $("closestResults").insertAdjacentHTML("afterbegin", `<div class="muted small">${note}</div>`);
+      } catch (e) {
+        // If we already had cached results from earlier fetchPlacesWithCache, render them anyway
+        if (placesRaw.length) {
+          placesSource = "cache";
+          updatePlacesMeta();
+          renderClosestAndList(lat, lon);
+          setPlacesUiEnabled(true);
+          $("closestResults").insertAdjacentHTML(
+            "afterbegin",
+            `<div class="muted small">Overpass busy; showing cached results. (${safeText(e.message)})</div>`
+          );
+        } else {
+          $("closestResults").textContent = "Nearby place search failed (Overpass busy / rate-limited). Wait a bit and refresh.";
+          console.warn(e);
+          setPlacesUiEnabled(false);
+        }
+      }
+
+      // TfL
       try {
         const lines = await fetchTubeStatus();
         renderTubeStatus(lines);
@@ -440,8 +1017,12 @@ out center tags;
 
       setStatus("Done.");
       $("btnRefresh").disabled = false;
+      $("btnFollow").disabled = false;
     }
 
+    // =========================================================
+    // Geolocation
+    // =========================================================
     function getLocationOnce() {
       if (!navigator.geolocation) {
         setStatus("Geolocation is not supported by your browser.");
@@ -468,7 +1049,7 @@ out center tags;
       if (!navigator.geolocation) return;
       if (watchId !== null) return;
 
-      setStatus("Watching location… (pub lookup is throttled to avoid rate limits)");
+      setStatus("Watching location… (places are cached/throttled; TfL + weather refresh each update)");
       $("btnStopWatch").disabled = false;
 
       watchId = navigator.geolocation.watchPosition(
@@ -493,20 +1074,35 @@ out center tags;
       $("btnStopWatch").disabled = true;
     }
 
-    // ---------------------------
+    // =========================================================
     // UI bindings
-    // ---------------------------
+    // =========================================================
     $("btnLocate").addEventListener("click", getLocationOnce);
 
     $("btnRefresh").addEventListener("click", () => {
-      if (!meMarker) return;
-      const { lat, lng } = meMarker.getLatLng();
-      refreshAll(lat, lng, 0);
+      if (lastLat == null || lastLon == null) return;
+      refreshAll(lastLat, lastLon, lastAcc || 0);
     });
 
     $("btnFollow").addEventListener("click", startWatch);
     $("btnStopWatch").addEventListener("click", stopWatch);
 
+    $("btnApplyFilters").addEventListener("click", () => {
+      if (lastLat == null || lastLon == null) return;
+      renderClosestAndList(lastLat, lastLon);
+      $("crawlResults").textContent = "—";
+      setStatus("Filters applied.");
+    });
+
+    $("btnPubCrawl").addEventListener("click", () => {
+      if (lastLat == null || lastLon == null) return;
+      renderPubCrawl(lastLat, lastLon);
+      setStatus("Pub crawl generated.");
+    });
+
+    wireFiltersChangeHandlers();
+
+    setPlacesUiEnabled(false);
     setStatus("Click “Get my location” to begin.");
   </script>
 </body>
