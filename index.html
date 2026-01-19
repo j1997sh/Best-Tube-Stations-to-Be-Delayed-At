@@ -1,205 +1,437 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Best Stations to Be Delayed At</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Best Tube Station To Be Delayed At</title>
 
-<style>
-:root{
-  --bg:#0b0d10;
-  --panel:#151a22;
-  --panel2:#0f1318;
-  --text:#e8eef6;
-  --muted:#9fb0c4;
-  --line:#253043;
-  --good:#2ecc71;
-  --warn:#f1c40f;
-  --bad:#e74c3c;
-  --accent:#6aa6ff;
-  --radius:16px;
-}
-*{box-sizing:border-box}
-body{
-  margin:0;
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
-  background:var(--bg);
-  color:var(--text);
-}
-header{
-  position:sticky;top:0;z-index:10;
-  background:rgba(11,13,16,.92);
-  border-bottom:1px solid var(--line);
-}
-.wrap{max-width:1100px;margin:0 auto;padding:16px}
-h1{margin:0;font-size:18px}
-.sub{font-size:12px;color:var(--muted)}
-.controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
-.control{flex:1 1 160px;background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:10px}
-label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
-select,input,button{
-  width:100%;padding:8px;border-radius:10px;
-  background:var(--panel2);border:1px solid var(--line);color:var(--text)
-}
-button{cursor:pointer}
-main{padding:16px}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);padding:12px}
-table{width:100%;border-collapse:collapse}
-th,td{padding:10px 6px;border-bottom:1px solid var(--line);text-align:left}
-th{font-size:12px;color:var(--muted)}
-tr:hover{background:rgba(255,255,255,.03);cursor:pointer}
-.cards{display:none}
-@media(max-width:720px){
-  table{display:none}
-  .cards{display:block}
-  .card{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px}
-}
-.sheet{
-  position:fixed;left:0;right:0;bottom:-100%;
-  transition:bottom .25s ease;z-index:20
-}
-.sheet.open{bottom:0}
-.sheet-inner{
-  background:var(--panel);border-radius:20px 20px 0 0;
-  padding:14px;border-top:1px solid var(--line);
-  max-height:70vh;overflow:auto
-}
-.pub{border:1px solid var(--line);border-radius:14px;padding:10px;margin-top:10px}
-.pub .links{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
-.pill{padding:6px 8px;border-radius:999px;border:1px solid var(--line);font-size:12px;text-decoration:none;color:var(--text)}
-.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
-</style>
+  <!-- Leaflet (map) -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <style>
+    :root { color-scheme: light; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: #f6f7f8;
+      color: #111;
+    }
+    header {
+      padding: 16px 18px;
+      background: white;
+      border-bottom: 1px solid #e6e6e6;
+    }
+    h1 { margin: 0 0 6px 0; font-size: 18px; }
+    p.sub { margin: 0; color: #555; font-size: 13px; line-height: 1.4; }
+
+    .wrap {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 12px;
+      padding: 12px;
+    }
+    @media (max-width: 900px) {
+      .wrap { grid-template-columns: 1fr; }
+      #map { height: 55vh !important; }
+    }
+
+    .card {
+      background: white;
+      border: 1px solid #e6e6e6;
+      border-radius: 14px;
+      padding: 12px;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.02);
+    }
+    .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    input[type="text"] {
+      flex: 1;
+      min-width: 180px;
+      padding: 10px 12px;
+      border: 1px solid #d9d9d9;
+      border-radius: 10px;
+      font-size: 14px;
+      outline: none;
+    }
+    button {
+      padding: 10px 12px;
+      border: 1px solid #d9d9d9;
+      border-radius: 10px;
+      background: #111;
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+    .muted { color: #666; font-size: 12px; line-height: 1.35; }
+    .kv {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 6px 10px;
+      font-size: 13px;
+      margin-top: 10px;
+    }
+    .k { color: #666; }
+    .v { color: #111; }
+    .status {
+      margin-top: 10px;
+      max-height: 210px;
+      overflow: auto;
+      border: 1px solid #eee;
+      border-radius: 10px;
+      padding: 10px;
+      background: #fafafa;
+      font-size: 13px;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid #e2e2e2;
+      background: #fff;
+    }
+    #map { height: calc(100vh - 110px); border-radius: 14px; border: 1px solid #e6e6e6; }
+    .error { color: #b00020; font-size: 13px; margin-top: 8px; }
+    a { color: inherit; }
+    code.inline { background:#f0f0f0; padding:2px 6px; border-radius:6px; }
+  </style>
 </head>
 
 <body>
 <header>
-  <div class="wrap">
-    <h1>Best Stations to Be Delayed At</h1>
-    <div class="sub">Live Tube disruption × nearby pubs</div>
-
-    <div class="controls">
-      <div class="control">
-        <label>Line</label>
-        <select id="lineFilter"><option value="all">All lines</option></select>
-      </div>
-      <div class="control">
-        <label>Pub radius (m)</label>
-        <select id="radius"><option>300</option><option selected>500</option><option>800</option></select>
-      </div>
-      <div class="control">
-        <label>Actions</label>
-        <button id="refreshBtn">Refresh</button>
-        <button id="locBtn">Use my location</button>
-      </div>
-      <div class="control">
-        <label>TfL keys (optional)</label>
-        <input id="tflKeys" placeholder="app_id=...&app_key=..." />
-      </div>
-    </div>
-
-    <div class="sub" id="statusMsg">Loading…</div>
-  </div>
+  <h1>Best Tube Station To Be Delayed At</h1>
+  <p class="sub">Enter a postcode → nearest Tube station → live line status → closest pub. (Browser-only demo.)</p>
 </header>
 
-<main class="wrap">
-  <div class="panel">
-    <table>
-      <thead>
-        <tr><th>#</th><th>Station</th><th>Pubs</th><th>Status</th><th>Score</th></tr>
-      </thead>
-      <tbody id="rows"></tbody>
-    </table>
-    <div class="cards" id="cards"></div>
-  </div>
-</main>
+<div class="wrap">
+  <div class="card">
+    <div class="row">
+      <input id="postcode" type="text" placeholder="e.g. SW1A 1AA" autocomplete="postal-code" />
+      <button id="go">Find my delay pub</button>
+    </div>
+    <p class="muted" style="margin:10px 0 0 0;">
+      Uses <b>postcodes.io</b> for geocoding, <b>TfL Unified API</b> for station + status, and <b>OpenStreetMap Overpass</b> for pubs.
+      If TfL fails due to CORS, this page uses a demo proxy (<code class="inline">allorigins.win</code>).
+    </p>
 
-<div class="sheet" id="sheet">
-  <div class="sheet-inner">
-    <button onclick="closeSheet()">Close</button>
-    <h2 id="sheetTitle"></h2>
-    <div id="sheetBody"></div>
+    <div id="chips" class="row" style="margin-top:10px;"></div>
+
+    <div id="info" class="kv" style="display:none;">
+      <div class="k">Postcode</div><div class="v" id="iPostcode"></div>
+      <div class="k">Nearest station</div><div class="v" id="iStation"></div>
+      <div class="k">Distance</div><div class="v" id="iDistance"></div>
+      <div class="k">Closest pub</div><div class="v" id="iPub"></div>
+      <div class="k">Walk-ish</div><div class="v" id="iWalk"></div>
+    </div>
+
+    <div id="statusWrap" style="display:none;">
+      <div style="margin-top:12px;" class="row">
+        <span class="pill">Live Tube status</span>
+        <span class="muted">Lines serving the chosen station (when available)</span>
+      </div>
+      <div id="status" class="status"></div>
+    </div>
+
+    <div id="err" class="error" style="display:none;"></div>
   </div>
+
+  <div id="map"></div>
 </div>
 
 <script>
-/* === FULL WORKING SCRIPT === */
-const TFL_BASE="https://api.tfl.gov.uk";
-const OVERPASS="https://overpass-api.de/api/interpreter";
-const els={
-  rows:rows,cards:cards,sheet:sheet,
-  sheetTitle:sheetTitle,sheetBody:sheetBody
-};
-const lineFilter=document.getElementById("lineFilter");
-const radiusSel=document.getElementById("radius");
-const state={stations:[],lines:new Map(),myPos:null};
+/**
+ * ---------- Config ----------
+ * TfL endpoints (Unified API): https://api.tfl.gov.uk
+ * Many browsers will block direct calls (CORS), so we wrap requests via a demo proxy.
+ */
+const TFL_APP_ID = "";   // optional
+const TFL_APP_KEY = "";  // optional
 
-const fetchJSON=(u,t=25000)=>new Promise((res,rej)=>{
-  const c=new AbortController();setTimeout(()=>c.abort(),t);
-  fetch(u,{signal:c.signal}).then(r=>r.json()).then(res).catch(rej);
-});
-const tfl=(p)=>TFL_BASE+p+(tflKeys.value?("?"+tflKeys.value):"");
-const sevFactor=s=>1+(10-(s??10))*0.3;
+// Demo CORS proxy (not for production)
+const CORS_PROXY = (url) => `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
 
-async function loadLines(){
-  const d=await fetchJSON(tfl("/Line/Mode/tube/Status"));
-  lineFilter.innerHTML='<option value="all">All lines</option>';
-  d.forEach(l=>{
-    const s=l.lineStatuses?.[0];
-    const f=sevFactor(s?.statusSeverity);
-    state.lines.set(l.id,{name:l.name,factor:f,desc:s?.statusSeverityDescription||"Good Service"});
-    const o=document.createElement("option");o.value=l.id;o.textContent=l.name;
-    lineFilter.appendChild(o);
-  });
-}
-async function loadStations(){
-  const d=await fetchJSON(tfl("/StopPoint/Mode/tube"),30000);
-  state.stations=(d.stopPoints||[]).filter(s=>s.stopType==="NaptanMetroStation")
-    .map(s=>({id:s.id,name:s.commonName.replace(" Underground Station",""),lat:s.lat,lon:s.lon,lines:s.lines.map(l=>l.id)}));
-}
-async function pubsAround(st,r){
-  const q=`[out:json];node["amenity"="pub"](around:${r},${st.lat},${st.lon});out;`;
-  const r2=await fetch(OVERPASS,{method:"POST",body:"data="+encodeURIComponent(q)});
-  const j=await r2.json();
-  return (j.elements||[]).map(e=>({name:e.tags?.name||"Pub",lat:e.lat,lon:e.lon}));
-}
-const dist=(a,b,c,d)=>Math.hypot(a-c,b-d)*111000;
+const endpoints = {
+  // UK postcode geocode (no key needed)
+  geocode: (postcode) => `https://api.postcodes.io/postcodes/${encodeURIComponent(postcode)}`,
 
-async function build(){
-  statusMsg.textContent="Building leaderboard…";
-  await loadLines();await loadStations();
-  const r=+radiusSel.value;
-  const rowsData=[];
-  for(const st of state.stations.slice(0,25)){
-    const lf=lineFilter.value;
-    const line=st.lines.find(l=>lf==="all"||l===lf);
-    const meta=state.lines.get(line)||{factor:1,desc:"OK"};
-    const pubs=await pubsAround(st,r);
-    const score=Math.round(pubs.length*meta.factor*10)/10;
-    rowsData.push({...st,pubs,score,desc:meta.desc});
+  // TfL StopPoint near a location
+  // We'll ask for common stop types that include Tube stations.
+  // Docs: TfL Unified API Swagger lists StopPoint search/nearby.
+  tflStopPoint: (lat, lon, radius=1500) => {
+    const base = `https://api.tfl.gov.uk/StopPoint?lat=${lat}&lon=${lon}&radius=${radius}&stopTypes=NaptanMetroStation`;
+    return withTflKeys(base);
+  },
+
+  // TfL line status for all Tube lines
+  tflTubeStatus: () => withTflKeys(`https://api.tfl.gov.uk/Line/Mode/tube/Status`),
+
+  // Overpass: find pubs near station coords
+  overpassPubs: (lat, lon, around=900) => {
+    const q = `
+      [out:json][timeout:25];
+      (
+        node["amenity"="pub"](around:${around},${lat},${lon});
+        way["amenity"="pub"](around:${around},${lat},${lon});
+        relation["amenity"="pub"](around:${around},${lat},${lon});
+      );
+      out center;
+    `;
+    return `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(q)}`;
   }
-  rowsData.sort((a,b)=>b.score-a.score);
-  rows.innerHTML="";cards.innerHTML="";
-  rowsData.forEach((s,i)=>{
-    rows.innerHTML+=`<tr onclick="openSheet(${i})"><td>${i+1}</td><td>${s.name}</td><td>${s.pubs.length}</td><td>${s.desc}</td><td>${s.score}</td></tr>`;
-    cards.innerHTML+=`<div class="card" onclick="openSheet(${i})"><b>${s.name}</b><br>${s.desc}<br>Score ${s.score}</div>`;
-  });
-  window._rows=rowsData;
-  statusMsg.textContent="Ready";
+};
+
+function withTflKeys(url) {
+  const hasQ = url.includes("?");
+  const params = [];
+  if (TFL_APP_ID) params.push(`app_id=${encodeURIComponent(TFL_APP_ID)}`);
+  if (TFL_APP_KEY) params.push(`app_key=${encodeURIComponent(TFL_APP_KEY)}`);
+  if (!params.length) return url;
+  return url + (hasQ ? "&" : "?") + params.join("&");
 }
-function openSheet(i){
-  const s=_rows[i];
-  sheetTitle.textContent=s.name;
-  sheetBody.innerHTML=s.pubs.map(p=>{
-    const g=`https://www.google.com/maps/dir/?api=1&origin=${s.lat},${s.lon}&destination=${p.lat},${p.lon}&travelmode=walking`;
-    return `<div class="pub"><b>${p.name}</b><div class="links"><a class="pill" target="_blank" href="${g}">Directions</a></div></div>`;
+
+/**
+ * ---------- Helpers ----------
+ */
+function $(id){ return document.getElementById(id); }
+
+function showError(msg){
+  $("err").style.display = "block";
+  $("err").textContent = msg;
+}
+function clearError(){
+  $("err").style.display = "none";
+  $("err").textContent = "";
+}
+
+function setBusy(b){
+  $("go").disabled = b;
+  $("go").textContent = b ? "Working..." : "Find my delay pub";
+}
+
+function haversineMeters(aLat, aLon, bLat, bLon) {
+  const R = 6371000;
+  const toRad = (d) => d * Math.PI / 180;
+  const dLat = toRad(bLat - aLat);
+  const dLon = toRad(bLon - aLon);
+  const s1 = Math.sin(dLat/2), s2 = Math.sin(dLon/2);
+  const aa = s1*s1 + Math.cos(toRad(aLat))*Math.cos(toRad(bLat))*s2*s2;
+  const c = 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1-aa));
+  return R * c;
+}
+
+function prettyMeters(m){
+  if (m < 1000) return `${Math.round(m)} m`;
+  return `${(m/1000).toFixed(2)} km`;
+}
+function roughWalkTime(minMeters){
+  // ~80 m/min ~= 4.8 km/h
+  const mins = Math.max(1, Math.round(minMeters / 80));
+  return `${mins} min`;
+}
+
+async function fetchJson(url, {useProxy=false} = {}) {
+  const finalUrl = useProxy ? CORS_PROXY(url) : url;
+  const res = await fetch(finalUrl, { headers: { "Accept": "application/json" } });
+  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+  return await res.json();
+}
+
+function makeChip(text){
+  const el = document.createElement("span");
+  el.className = "pill";
+  el.textContent = text;
+  return el;
+}
+
+/**
+ * ---------- Map ----------
+ */
+const map = L.map("map").setView([51.5074, -0.1278], 12);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+let markersLayer = L.layerGroup().addTo(map);
+
+function resetMarkers(){
+  markersLayer.clearLayers();
+}
+
+function addMarker(lat, lon, label){
+  const m = L.marker([lat, lon]).addTo(markersLayer);
+  if (label) m.bindPopup(label);
+  return m;
+}
+
+/**
+ * ---------- Core flow ----------
+ */
+async function run() {
+  clearError();
+  $("info").style.display = "none";
+  $("statusWrap").style.display = "none";
+  $("chips").innerHTML = "";
+  resetMarkers();
+
+  const raw = $("postcode").value.trim();
+  if (!raw) {
+    showError("Enter a postcode first.");
+    return;
+  }
+
+  setBusy(true);
+
+  try {
+    // 1) Geocode postcode
+    const geo = await fetchJson(endpoints.geocode(raw));
+    if (!geo || geo.status !== 200 || !geo.result) {
+      throw new Error("Could not geocode that postcode.");
+    }
+    const { latitude: userLat, longitude: userLon, postcode } = geo.result;
+    $("chips").appendChild(makeChip(`📍 ${postcode}`));
+
+    // 2) Nearest Tube station via TfL StopPoint
+    // Use proxy because TfL frequently fails CORS in browsers.
+    const stopData = await fetchJson(endpoints.tflStopPoint(userLat, userLon, 2000), { useProxy: true });
+    const stops = (stopData && stopData.stopPoints) ? stopData.stopPoints : [];
+    if (!stops.length) throw new Error("No nearby Tube stations found (within ~2km). Try another postcode.");
+
+    // Pick closest by lat/lon distance
+    const sorted = stops
+      .filter(s => typeof s.lat === "number" && typeof s.lon === "number")
+      .map(s => ({ s, d: haversineMeters(userLat, userLon, s.lat, s.lon) }))
+      .sort((a,b) => a.d - b.d);
+
+    const station = sorted[0].s;
+    const stationDist = sorted[0].d;
+
+    $("chips").appendChild(makeChip("🚇 Nearest station found"));
+
+    // 3) Find closest pub near station using Overpass
+    const over = await fetchJson(endpoints.overpassPubs(station.lat, station.lon, 1000));
+    const els = (over && over.elements) ? over.elements : [];
+    if (!els.length) throw new Error("No pubs found within ~1km of that station (surprisingly).");
+
+    // Normalize pub points (node: lat/lon, way/relation: center)
+    const pubs = els.map(e => {
+      const lat = e.lat ?? (e.center && e.center.lat);
+      const lon = e.lon ?? (e.center && e.center.lon);
+      const name = (e.tags && e.tags.name) ? e.tags.name : "Unnamed pub";
+      return (typeof lat === "number" && typeof lon === "number")
+        ? { lat, lon, name, osmId: `${e.type}/${e.id}` }
+        : null;
+    }).filter(Boolean);
+
+    pubs.sort((a,b) =>
+      haversineMeters(station.lat, station.lon, a.lat, a.lon) -
+      haversineMeters(station.lat, station.lon, b.lat, b.lon)
+    );
+
+    const pub = pubs[0];
+    const pubDist = haversineMeters(station.lat, station.lon, pub.lat, pub.lon);
+
+    $("chips").appendChild(makeChip("🍺 Closest pub found"));
+
+    // 4) Tube line status (live)
+    // We’ll fetch overall tube status and then filter to lines that appear to serve this station if possible.
+    const tubeStatus = await fetchJson(endpoints.tflTubeStatus(), { useProxy: true });
+
+    // Attempt: station.lines may exist as array of lines with id/name
+    const stationLineIds = (station.lines || []).map(l => l.id).filter(Boolean);
+    let relevant = tubeStatus;
+
+    if (Array.isArray(tubeStatus) && stationLineIds.length) {
+      relevant = tubeStatus.filter(line => stationLineIds.includes(line.id));
+    }
+
+    // Render
+    $("iPostcode").textContent = postcode;
+    $("iStation").innerHTML = `${escapeHtml(station.commonName || "Unknown station")} <span class="muted">(${escapeHtml(station.naptanId || "")})</span>`;
+    $("iDistance").textContent = `${prettyMeters(stationDist)} from postcode`;
+    $("iPub").textContent = `${pub.name}`;
+    $("iWalk").textContent = `${prettyMeters(pubDist)} (~${roughWalkTime(pubDist)}) from station`;
+    $("info").style.display = "grid";
+
+    // Status box
+    $("status").innerHTML = renderStatus(relevant, stationLineIds.length ? "Lines at this station" : "All Tube lines (station lines unavailable)");
+    $("statusWrap").style.display = "block";
+
+    // Map markers
+    const userM = addMarker(userLat, userLon, `<b>Your postcode</b><br>${escapeHtml(postcode)}`);
+    const stationM = addMarker(station.lat, station.lon, `<b>${escapeHtml(station.commonName || "Tube station")}</b><br>${prettyMeters(stationDist)} away`);
+    const pubM = addMarker(pub.lat, pub.lon, `<b>${escapeHtml(pub.name)}</b><br>${prettyMeters(pubDist)} from station`);
+
+    // Fit bounds
+    const group = L.featureGroup([userM, stationM, pubM]);
+    map.fitBounds(group.getBounds().pad(0.25));
+
+    // A “best place to be delayed” gag score:
+    // More disruption + closer pub => “better”
+    const disruptionScore = estimateDisruptionScore(relevant);
+    const delayVibes = Math.round((disruptionScore * 10) + Math.max(0, 10 - Math.min(10, pubDist / 150)));
+    $("chips").appendChild(makeChip(`⏱️ Delay vibes: ${delayVibes}/25`));
+
+  } catch (e) {
+    showError(e.message || String(e));
+  } finally {
+    setBusy(false);
+  }
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, s => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[s]));
+}
+
+function renderStatus(statusData, title){
+  if (!Array.isArray(statusData) || !statusData.length) {
+    return `<div class="muted">No status data returned.</div>`;
+  }
+  const lines = statusData.map(line => {
+    const name = line.name || line.id || "Unknown line";
+    const statuses = (line.lineStatuses || []).map(ls => ls.statusSeverityDescription || "Unknown").join(", ") || "Unknown";
+    const reason = (line.lineStatuses || []).map(ls => ls.reason).filter(Boolean)[0] || "";
+    return `
+      <div style="padding:8px 6px; border-bottom:1px solid #eee;">
+        <div><b>${escapeHtml(name)}</b> — ${escapeHtml(statuses)}</div>
+        ${reason ? `<div class="muted">${escapeHtml(reason)}</div>` : ``}
+      </div>
+    `;
   }).join("");
-  sheet.classList.add("open");
+
+  return `<div class="muted" style="margin-bottom:8px;"><b>${escapeHtml(title)}</b></div>${lines}`;
 }
-function closeSheet(){sheet.classList.remove("open")}
-refreshBtn.onclick=build;
-locBtn.onclick=()=>navigator.geolocation?.getCurrentPosition(p=>{state.myPos=p.coords;build()});
-lineFilter.onchange=build;
-build();
+
+function estimateDisruptionScore(statusData){
+  // crude: count anything not “Good Service”
+  if (!Array.isArray(statusData)) return 0;
+  let bad = 0;
+  for (const line of statusData) {
+    const s = (line.lineStatuses || [])[0];
+    const desc = (s && s.statusSeverityDescription) ? s.statusSeverityDescription.toLowerCase() : "";
+    if (desc && !desc.includes("good service")) bad += 1;
+  }
+  return bad;
+}
+
+// UI
+$("go").addEventListener("click", run);
+$("postcode").addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
 </script>
 </body>
 </html>
