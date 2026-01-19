@@ -1,276 +1,464 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Best Tube Station To Be Delayed At</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Where Am I? Tube Delays + Closest Pub + Wetherspoons</title>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet (map) -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
 
-<style>
-:root{
-  --blue:#0019a8;
-  --red:#da291c;
-  --bg:#f3f5fb;
-  --card:#fff;
-  --line:#e3e6f2;
-  --muted:#5f6b85;
-}
-*{box-sizing:border-box}
-body{
-  margin:0;
-  font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
-  background:linear-gradient(180deg,#fff,var(--bg));
-}
-header{
-  background:#fff;
-  border-bottom:1px solid var(--line);
-  padding:14px;
-}
-h1{margin:0;font-size:18px}
-.sub{font-size:13px;color:var(--muted)}
-
-.wrap{
-  max-width:1100px;
-  margin:auto;
-  padding:14px;
-  display:grid;
-  grid-template-columns:420px 1fr;
-  gap:14px;
-}
-@media(max-width:900px){
-  .wrap{grid-template-columns:1fr}
-  #map{height:50vh}
-}
-
-.card{
-  background:var(--card);
-  border:1px solid var(--line);
-  border-radius:16px;
-  padding:14px;
-}
-.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.grow{flex:1}
-
-input,button{
-  padding:12px;
-  border-radius:12px;
-  border:1px solid var(--line);
-  font-size:14px;
-}
-button{
-  background:linear-gradient(90deg,var(--blue),var(--red));
-  color:#fff;
-  font-weight:700;
-  cursor:pointer;
-}
-button:disabled{opacity:.6}
-
-.pill{
-  padding:6px 10px;
-  border-radius:999px;
-  border:1px solid var(--line);
-  background:#fff;
-  font-size:12px;
-}
-.small{font-size:12px;color:var(--muted)}
-
-#map{
-  height:calc(100vh - 120px);
-  border-radius:16px;
-  border:1px solid var(--line);
-}
-
-.pub{
-  margin-top:14px;
-  padding-top:14px;
-  border-top:1px solid var(--line);
-}
-.pub a{
-  text-decoration:none;
-  font-size:12px;
-  padding:6px 8px;
-  border-radius:8px;
-  border:1px solid var(--line);
-}
-.verdict{
-  margin-top:12px;
-  padding:10px;
-  border-radius:12px;
-  background:#f7f8fd;
-  border:1px dashed var(--line);
-}
-</style>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      line-height: 1.35;
+    }
+    header {
+      padding: 16px 16px 8px;
+      border-bottom: 1px solid rgba(127,127,127,.25);
+    }
+    h1 { margin: 0 0 8px; font-size: 18px; }
+    .sub { opacity: .8; font-size: 13px; margin: 0 0 12px; }
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 8px 0 0;
+    }
+    button {
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid rgba(127,127,127,.35);
+      background: rgba(127,127,127,.12);
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    main {
+      display: grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 12px;
+      padding: 12px 16px 16px;
+    }
+    #map { height: 70vh; min-height: 420px; border-radius: 14px; overflow: hidden; }
+    .panel {
+      border: 1px solid rgba(127,127,127,.25);
+      border-radius: 14px;
+      padding: 12px;
+      background: rgba(127,127,127,.06);
+      overflow: auto;
+      max-height: 70vh;
+    }
+    .card {
+      border: 1px solid rgba(127,127,127,.25);
+      border-radius: 12px;
+      padding: 10px;
+      margin: 10px 0;
+      background: rgba(127,127,127,.06);
+    }
+    .row { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+    .muted { opacity: .8; font-size: 13px; }
+    .ok { color: #1b8f3a; font-weight: 700; }
+    .bad { color: #c0352b; font-weight: 800; }
+    .warn { color: #b97a00; font-weight: 800; }
+    a { color: inherit; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    @media (max-width: 900px) {
+      main { grid-template-columns: 1fr; }
+      #map, .panel { max-height: none; height: 55vh; }
+    }
+  </style>
 </head>
-
 <body>
-<header>
-  <h1>Best Tube Station To Be Delayed At</h1>
-  <div class="sub">Nearest station. Nearest pub. Nearest Spoons. Brutal honesty.</div>
-</header>
+  <header>
+    <h1>Tube delays + closest pub + closest Wetherspoons</h1>
+    <p class="sub">
+      Uses your device location (with permission), TfL line status, and OpenStreetMap to find nearby pubs.
+    </p>
 
-<div class="wrap">
-  <div>
-    <div class="card">
-      <div class="row">
-        <input id="postcode" placeholder="Postcode (optional)" class="grow">
-        <button id="go">Go</button>
+    <div class="controls">
+      <button id="btnLocate">📍 Get my location</button>
+      <button id="btnRefresh" disabled>🔄 Refresh all</button>
+      <button id="btnFollow" disabled>🧭 Follow me (watch)</button>
+      <button id="btnStopWatch" disabled>🛑 Stop watch</button>
+    </div>
+
+    <p id="status" class="muted" style="margin: 10px 0 0;"></p>
+  </header>
+
+  <main>
+    <div id="map"></div>
+
+    <div class="panel">
+      <div class="card">
+        <div class="row">
+          <strong>Your location</strong>
+          <span id="coords" class="muted">—</span>
+        </div>
+        <div id="address" class="muted" style="margin-top: 6px;">—</div>
       </div>
 
-      <div id="chips" class="row" style="margin-top:10px"></div>
-      <div id="verdict" class="verdict small"></div>
+      <div class="card">
+        <strong>Closest places</strong>
+        <div id="closestResults" class="muted" style="margin-top: 8px;">—</div>
+      </div>
 
-      <div id="closestPub" class="pub"></div>
-      <div id="closestSpoons" class="pub"></div>
+      <div class="card">
+        <div class="row">
+          <strong>Tube status (TfL)</strong>
+          <span class="muted" id="tflUpdated">—</span>
+        </div>
+        <div id="tubeStatus" class="muted" style="margin-top: 8px;">—</div>
+      </div>
+
+      <div class="card">
+        <strong>Debug</strong>
+        <div class="muted">
+          If geolocation doesn’t work, ensure you’re on <code>https://</code> or <code>http://localhost</code>.
+        </div>
+      </div>
     </div>
-  </div>
+  </main>
 
-  <div id="map"></div>
-</div>
+  <script>
+    // ---------------------------
+    // Helpers
+    // ---------------------------
+    const $ = (id) => document.getElementById(id);
 
-<script>
-/* ---------------- config ---------------- */
-const PROXY = url =>
-  `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    function setStatus(msg) {
+      $("status").textContent = msg;
+    }
 
-async function fetchJson(url){
-  const r = await fetch(PROXY(url));
-  if(!r.ok) throw new Error("Network error");
-  return await r.json();
-}
+    function haversineMeters(lat1, lon1, lat2, lon2) {
+      const R = 6371000; // meters
+      const toRad = (d) => d * Math.PI / 180;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a =
+        Math.sin(dLat/2) ** 2 +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
 
-/* ---------------- helpers ---------------- */
-const R=6371000;
-const toRad=x=>x*Math.PI/180;
-const dist=(a,b,c,d)=>{
-  const dLat=toRad(c-a),dLon=toRad(d-b);
-  const x=Math.sin(dLat/2)**2+
-    Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dLon/2)**2;
-  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
-};
-const m=x=>x<1000?`${Math.round(x)} m`:`${(x/1000).toFixed(2)} km`;
-const isSpoons=n=>(n||"").toLowerCase().includes("wetherspoon");
+    function fmtDistance(m) {
+      if (m < 1000) return `${Math.round(m)} m`;
+      return `${(m / 1000).toFixed(2)} km`;
+    }
 
-/* ---------------- map ---------------- */
-const map=L.map("map").setView([51.5074,-0.1278],12);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
-const markers=L.layerGroup().addTo(map);
+    function directionsLink(lat, lon) {
+      // Google Maps directions from current location
+      return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lat + "," + lon)}&travelmode=walking`;
+    }
 
-/* ---------------- funny bits ---------------- */
-const EXCUSES=[
-  "Signal failure. Emotionally unavailable train.",
-  "Waiting for a train that spiritually isn’t coming.",
-  "Minor delays due to vibes.",
-  "Trespasser on the line (it was probably a fox).",
-  "Train cancelled because it sensed weakness."
-];
-function verdictText(pubDist, hasSpoons){
-  if(pubDist < 200) return "🟢 Yes. Sit down immediately.";
-  if(pubDist < 500) return "🟠 One pint, then reassess life.";
-  if(hasSpoons) return "🟠 It’s a Spoons. You know the rules.";
-  return "🔴 This delay is not pub-worthy.";
-}
+    function safeText(v) {
+      return (v === null || v === undefined || v === "") ? "—" : String(v);
+    }
 
-/* ---------------- main ---------------- */
-async function run(){
-  markers.clearLayers();
-  chips.innerHTML="⏳ Working out how bad this is…";
-  closestPub.innerHTML="";
-  closestSpoons.innerHTML="";
-  verdict.innerHTML="";
+    // ---------------------------
+    // Map setup
+    // ---------------------------
+    const map = L.map("map").setView([51.5074, -0.1278], 12); // default London
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-  let lat, lon;
+    let meMarker = null;
+    let pubMarker = null;
+    let spoonsMarker = null;
+    let watchId = null;
 
-  const pc=postcode.value.trim();
-  if(pc){
-    const geo=await fetchJson(`https://api.postcodes.io/postcodes/${pc}`);
-    lat=geo.result.latitude;
-    lon=geo.result.longitude;
-  }else{
-    const pos = await new Promise((res,rej)=>
-      navigator.geolocation.getCurrentPosition(res,rej)
-    );
-    lat=pos.coords.latitude;
-    lon=pos.coords.longitude;
-  }
+    function putMarker(existing, lat, lon, label) {
+      if (existing) map.removeLayer(existing);
+      const m = L.marker([lat, lon]).addTo(map).bindPopup(label);
+      return m;
+    }
 
-  const sp=await fetchJson(
-    `https://api.tfl.gov.uk/StopPoint?lat=${lat}&lon=${lon}&radius=1200&stopTypes=NaptanMetroStation`
-  );
-  const st=sp.stopPoints
-    .map(s=>({...s,d:dist(lat,lon,s.lat,s.lon)}))
-    .sort((a,b)=>a.d-b.d)[0];
+    // ---------------------------
+    // Data fetchers
+    // ---------------------------
 
-  chips.innerHTML="";
-  chips.append(
-    pill(`🚇 ${st.commonName}`)
-  );
+    async function reverseGeocode(lat, lon) {
+      // Nominatim: be gentle; include a User-Agent-ish header not possible from browser,
+      // but we can at least avoid spam.
+      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
+      const res = await fetch(url, { headers: { "Accept": "application/json" } });
+      if (!res.ok) throw new Error(`Reverse geocode failed: ${res.status}`);
+      return await res.json();
+    }
 
-  const over=await fetchJson(
-    `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(`
-      [out:json][timeout:10];
-      node["amenity"="pub"](around:900,${st.lat},${st.lon});
-      out tags center 20;
-    `)}`
-  );
+    async function fetchTubeStatus() {
+      // TfL Tube status
+      const url = "https://api.tfl.gov.uk/Line/Mode/tube/Status";
+      const res = await fetch(url, { headers: { "Accept": "application/json" } });
+      if (!res.ok) throw new Error(`TfL status failed: ${res.status}`);
+      return await res.json();
+    }
 
-  const pubs=over.elements.map(e=>{
-    if(!e.lat||!e.lon) return null;
-    return{
-      name:e.tags?.name||"Unnamed pub",
-      lat:e.lat,lon:e.lon,
-      d:dist(st.lat,st.lon,e.lat,e.lon)
-    };
-  }).filter(Boolean).sort((a,b)=>a.d-b.d);
+    async function overpassQuery(query) {
+      const url = "https://overpass-api.de/api/interpreter";
+      const res = await fetch(url, {
+        method: "POST",
+        body: query,
+        headers: { "Content-Type": "text/plain;charset=UTF-8" }
+      });
+      if (!res.ok) throw new Error(`Overpass failed: ${res.status}`);
+      return await res.json();
+    }
 
-  const pub=pubs[0];
-  const spoons=pubs.find(p=>isSpoons(p.name));
+    async function findNearbyPubs(lat, lon) {
+      // Search within 2500m for pubs + Wetherspoon-ish names
+      // We fetch:
+      // 1) all pubs (amenity=pub)
+      // 2) pubs/bars/restaurants with name matching Wetherspoon / JD Wetherspoon / Wetherspoons
+      const radius = 2500;
 
-  markers.addLayer(L.marker([lat,lon]).bindPopup("You"));
-  markers.addLayer(L.marker([st.lat,st.lon]).bindPopup(st.commonName));
+      const q = `
+[out:json][timeout:25];
+(
+  node(around:${radius},${lat},${lon})["amenity"="pub"];
+  way(around:${radius},${lat},${lon})["amenity"="pub"];
+  relation(around:${radius},${lat},${lon})["amenity"="pub"];
 
-  if(pub){
-    markers.addLayer(L.marker([pub.lat,pub.lon]).bindPopup(pub.name));
-    closestPub.innerHTML=renderPub("Closest pub",pub,st,lat,lon);
-  }
-  if(spoons){
-    markers.addLayer(L.marker([spoons.lat,spoons.lon]).bindPopup(spoons.name));
-    closestSpoons.innerHTML=renderPub("Closest Wetherspoons",spoons,st,lat,lon);
-  }
+  node(around:${radius},${lat},${lon})["name"~"wetherspoon|jd wetherspoon|wetherspoons","i"];
+  way(around:${radius},${lat},${lon})["name"~"wetherspoon|jd wetherspoon|wetherspoons","i"];
+  relation(around:${radius},${lat},${lon})["name"~"wetherspoon|jd wetherspoon|wetherspoons","i"];
+);
+out center tags;
+      `.trim();
 
-  verdict.innerHTML=`
-    <b>${verdictText(pub?.d||9999,!!spoons)}</b><br>
-    ${EXCUSES[Math.floor(Math.random()*EXCUSES.length)]}
-  `;
+      return await overpassQuery(q);
+    }
 
-  map.fitBounds(markers.getBounds().pad(0.3));
-}
+    function extractElementLatLon(el) {
+      // nodes have lat/lon; ways/relations may have center
+      if (el.type === "node") return { lat: el.lat, lon: el.lon };
+      if (el.center) return { lat: el.center.lat, lon: el.center.lon };
+      return null;
+    }
 
-function renderPub(title,pub,st,lat,lon){
-  const dirS=`https://www.google.com/maps/dir/?api=1&origin=${st.lat},${st.lon}&destination=${pub.lat},${pub.lon}&travelmode=walking`;
-  const dirU=`https://www.google.com/maps/dir/?api=1&origin=${lat},${lon}&destination=${pub.lat},${pub.lon}&travelmode=walking`;
-  const open=`https://www.google.com/maps/search/?api=1&query=${pub.lat},${pub.lon}`;
-  return `
-    <b>${title}</b><br>
-    <b>${pub.name}</b><br>
-    <span class="small">${m(pub.d)} from station</span>
-    <div class="row" style="margin-top:6px">
-      <a href="${dirS}" target="_blank">🚶 Station → Pub</a>
-      <a href="${dirU}" target="_blank">🚶 You → Pub</a>
-      <a href="${open}" target="_blank">📍 Maps</a>
-    </div>
-  `;
-}
-function pill(t){
-  const s=document.createElement("span");
-  s.className="pill";
-  s.textContent=t;
-  return s;
-}
+    function pickClosest(elements, lat, lon, predicateFn) {
+      let best = null;
 
-go.onclick=run;
-postcode.addEventListener("keydown",e=>e.key==="Enter"&&run());
-</script>
+      for (const el of elements) {
+        const pos = extractElementLatLon(el);
+        if (!pos) continue;
+        const tags = el.tags || {};
+        if (predicateFn && !predicateFn(tags)) continue;
+
+        const d = haversineMeters(lat, lon, pos.lat, pos.lon);
+        if (!best || d < best.distanceMeters) {
+          best = {
+            id: `${el.type}/${el.id}`,
+            name: tags.name || tags["brand"] || "Unnamed place",
+            lat: pos.lat,
+            lon: pos.lon,
+            distanceMeters: d,
+            tags
+          };
+        }
+      }
+      return best;
+    }
+
+    // ---------------------------
+    // Renderers
+    // ---------------------------
+    function renderTubeStatus(lines) {
+      // Keep it readable: show lines with anything other than "Good Service" first.
+      const mapped = lines.map(l => {
+        const statuses = (l.lineStatuses || []).map(s => s.statusSeverityDescription).filter(Boolean);
+        const unique = [...new Set(statuses)];
+        const worst = unique.find(x => x !== "Good Service") || "Good Service";
+        return { name: l.name, status: worst, details: unique.join(", ") };
+      });
+
+      mapped.sort((a, b) => {
+        const aBad = a.status !== "Good Service";
+        const bBad = b.status !== "Good Service";
+        if (aBad !== bBad) return aBad ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      const html = mapped.map(x => {
+        const cls = x.status === "Good Service" ? "ok" : (x.status.toLowerCase().includes("minor") ? "warn" : "bad");
+        return `
+          <div class="row" style="margin: 6px 0;">
+            <span><strong>${x.name}</strong></span>
+            <span class="${cls}">${x.status}</span>
+          </div>
+        `;
+      }).join("");
+
+      $("tubeStatus").innerHTML = html || "No status available.";
+      $("tflUpdated").textContent = new Date().toLocaleString();
+    }
+
+    function renderClosest(closestPub, closestSpoons) {
+      const parts = [];
+
+      if (closestPub) {
+        parts.push(`
+          <div style="margin-bottom: 10px;">
+            <div><strong>Closest pub</strong>: ${safeText(closestPub.name)}</div>
+            <div class="muted">Distance: ${fmtDistance(closestPub.distanceMeters)}</div>
+            <div class="muted"><a href="${directionsLink(closestPub.lat, closestPub.lon)}" target="_blank" rel="noreferrer">Walking directions</a></div>
+          </div>
+        `);
+      } else {
+        parts.push(`<div><strong>Closest pub</strong>: —</div>`);
+      }
+
+      if (closestSpoons) {
+        parts.push(`
+          <div>
+            <div><strong>Closest Wetherspoons</strong>: ${safeText(closestSpoons.name)}</div>
+            <div class="muted">Distance: ${fmtDistance(closestSpoons.distanceMeters)}</div>
+            <div class="muted"><a href="${directionsLink(closestSpoons.lat, closestSpoons.lon)}" target="_blank" rel="noreferrer">Walking directions</a></div>
+          </div>
+        `);
+      } else {
+        parts.push(`<div style="margin-top: 6px;"><strong>Closest Wetherspoons</strong>: — (none found nearby)</div>`);
+      }
+
+      $("closestResults").innerHTML = parts.join("");
+    }
+
+    // ---------------------------
+    // Main flow
+    // ---------------------------
+    async function refreshAll(lat, lon, accuracyMeters) {
+      $("btnRefresh").disabled = true;
+      setStatus("Refreshing: reverse geocode, nearby pubs, and TfL status…");
+
+      $("coords").textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)} (±${Math.round(accuracyMeters)}m)`;
+
+      // marker for you
+      meMarker = putMarker(meMarker, lat, lon, "You are here");
+      map.setView([lat, lon], 15);
+
+      try {
+        // Reverse geocode
+        const geo = await reverseGeocode(lat, lon);
+        $("address").textContent = geo.display_name ? geo.display_name : "—";
+      } catch (e) {
+        $("address").textContent = "Reverse geocode failed (rate limit or network).";
+        console.warn(e);
+      }
+
+      try {
+        // Nearby places
+        const data = await findNearbyPubs(lat, lon);
+        const els = data.elements || [];
+
+        const closestPub = pickClosest(els, lat, lon, (tags) => tags.amenity === "pub");
+        const closestSpoons = pickClosest(els, lat, lon, (tags) => {
+          const n = (tags.name || "").toLowerCase();
+          return n.includes("wetherspoon") || n.includes("wetherspoons") || n.includes("jd wetherspoon");
+        });
+
+        renderClosest(closestPub, closestSpoons);
+
+        if (closestPub) pubMarker = putMarker(pubMarker, closestPub.lat, closestPub.lon, `Closest pub: ${closestPub.name}`);
+        if (closestSpoons) spoonsMarker = putMarker(spoonsMarker, closestSpoons.lat, closestSpoons.lon, `Closest Wetherspoons: ${closestSpoons.name}`);
+      } catch (e) {
+        $("closestResults").textContent = "Nearby pub search failed (Overpass rate limit or network).";
+        console.warn(e);
+      }
+
+      try {
+        // Tube status
+        const lines = await fetchTubeStatus();
+        renderTubeStatus(lines);
+      } catch (e) {
+        $("tubeStatus").textContent = "TfL status failed (network/CORS).";
+        console.warn(e);
+      }
+
+      setStatus("Done.");
+      $("btnRefresh").disabled = false;
+    }
+
+    function getLocationOnce() {
+      if (!navigator.geolocation) {
+        setStatus("Geolocation is not supported by your browser.");
+        return;
+      }
+      setStatus("Requesting location permission…");
+
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          $("btnRefresh").disabled = false;
+          $("btnFollow").disabled = false;
+          await refreshAll(latitude, longitude, accuracy);
+        },
+        (err) => {
+          setStatus(`Location error: ${err.message}`);
+          console.warn(err);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
+      );
+    }
+
+    function startWatch() {
+      if (!navigator.geolocation) return;
+      if (watchId !== null) return;
+
+      setStatus("Watching location… (updates as you move)");
+      $("btnStopWatch").disabled = false;
+
+      watchId = navigator.geolocation.watchPosition(
+        async (pos) => {
+          const { latitude, longitude, accuracy } = pos.coords;
+          $("btnRefresh").disabled = false;
+          await refreshAll(latitude, longitude, accuracy);
+        },
+        (err) => {
+          setStatus(`Watch error: ${err.message}`);
+          console.warn(err);
+        },
+        { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+      );
+    }
+
+    function stopWatch() {
+      if (watchId === null) return;
+      navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+      setStatus("Stopped watching location.");
+      $("btnStopWatch").disabled = true;
+    }
+
+    // ---------------------------
+    // UI bindings
+    // ---------------------------
+    $("btnLocate").addEventListener("click", getLocationOnce);
+    $("btnRefresh").addEventListener("click", () => {
+      // refresh uses last known marker position if we have it
+      if (!meMarker) return;
+      const { lat, lng } = meMarker.getLatLng();
+      refreshAll(lat, lng, 0);
+    });
+    $("btnFollow").addEventListener("click", startWatch);
+    $("btnStopWatch").addEventListener("click", stopWatch);
+
+    setStatus("Click “Get my location” to begin.");
+  </script>
 </body>
 </html>
