@@ -16,9 +16,6 @@
   --card:#fff;
   --line:#e3e6f2;
   --muted:#5f6b85;
-  --ok:#177245;
-  --warn:#b55a00;
-  --bad:#b00020;
 }
 *{box-sizing:border-box}
 body{
@@ -35,7 +32,7 @@ h1{margin:0;font-size:18px}
 .sub{font-size:13px;color:var(--muted)}
 
 .wrap{
-  max-width:1200px;
+  max-width:1100px;
   margin:auto;
   padding:14px;
   display:grid;
@@ -55,6 +52,7 @@ h1{margin:0;font-size:18px}
 }
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .grow{flex:1}
+
 input,button{
   padding:12px;
   border-radius:12px;
@@ -85,9 +83,9 @@ button:disabled{opacity:.6}
 }
 
 .pub{
+  margin-top:14px;
+  padding-top:14px;
   border-top:1px solid var(--line);
-  padding-top:10px;
-  margin-top:10px;
 }
 .pub a{
   text-decoration:none;
@@ -96,36 +94,13 @@ button:disabled{opacity:.6}
   border-radius:8px;
   border:1px solid var(--line);
 }
-
-.statusList{
-  margin-top:14px;
-  border:1px solid var(--line);
-  border-radius:14px;
-  overflow:hidden;
-}
-.statusRow{
-  padding:10px 12px;
-  border-bottom:1px solid var(--line);
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-}
-.statusRow:last-child{border-bottom:0}
-.badge{
-  padding:4px 8px;
-  border-radius:999px;
-  font-size:12px;
-}
-.sevOK{background:#e7f6ee;color:var(--ok)}
-.sevWarn{background:#fff2e0;color:var(--warn)}
-.sevBad{background:#fde7ea;color:var(--bad)}
 </style>
 </head>
 
 <body>
 <header>
   <h1>Best Tube Station To Be Delayed At</h1>
-  <div class="sub">Tube delays + best pubs nearby</div>
+  <div class="sub">Find the nearest station, the nearest pub, and the nearest Spoons.</div>
 </header>
 
 <div class="wrap">
@@ -137,19 +112,9 @@ button:disabled{opacity:.6}
       </div>
       <div id="chips" class="row" style="margin-top:10px"></div>
       <div id="info" class="small" style="margin-top:10px"></div>
-    </div>
 
-    <div class="card">
-      <b>Top 5 pubs</b>
-      <div id="pubList"></div>
-    </div>
-
-    <div class="card">
-      <div class="row" style="justify-content:space-between">
-        <b>Tube line status</b>
-        <button id="refreshStatus" style="padding:8px 10px;font-size:12px">Refresh</button>
-      </div>
-      <div id="statusList" class="statusList"></div>
+      <div id="closestPub" class="pub"></div>
+      <div id="closestSpoons" class="pub"></div>
     </div>
   </div>
 
@@ -157,17 +122,19 @@ button:disabled{opacity:.6}
 </div>
 
 <script>
-/* ---------- helpers ---------- */
-const PROXIES=[
-  u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
-  u=>`https://corsproxy.io/?${encodeURIComponent(u)}`
-];
+/* ---------------- helpers ---------------- */
+const PROXY=u=>`https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`;
+
 async function fetchJson(url){
-  for(const p of [u=>u,...PROXIES]){
-    try{const r=await fetch(p(url));if(r.ok)return await r.json();}catch{}
-  }
-  throw new Error("Fetch failed");
+  try{
+    const r=await fetch(url);
+    if(r.ok) return await r.json();
+  }catch{}
+  const r=await fetch(PROXY(url));
+  if(!r.ok) throw new Error("Network error");
+  return await r.json();
 }
+
 const R=6371000;
 const toRad=x=>x*Math.PI/180;
 const dist=(a,b,c,d)=>{
@@ -176,127 +143,95 @@ const dist=(a,b,c,d)=>{
     Math.cos(toRad(a))*Math.cos(toRad(c))*Math.sin(dLon/2)**2;
   return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 };
-const m=x=>x<1000?`${Math.round(x)}m`:`${(x/1000).toFixed(2)}km`;
+const m=x=>x<1000?`${Math.round(x)} m`:`${(x/1000).toFixed(2)} km`;
 const isSpoons=n=>(n||"").toLowerCase().includes("wetherspoon");
 
-/* ---------- map ---------- */
+/* ---------------- map ---------------- */
 const map=L.map("map").setView([51.5074,-0.1278],12);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 const markers=L.layerGroup().addTo(map);
 
-/* ---------- tube status ---------- */
-function sev(desc=""){
-  const d=desc.toLowerCase();
-  if(d.includes("good"))return"sevOK";
-  if(d.includes("minor")||d.includes("part"))return"sevWarn";
-  return"sevBad";
-}
-async function loadTubeStatus(){
-  const host=document.getElementById("statusList");
-  host.innerHTML="";
-  try{
-    const data=await fetchJson("https://api.tfl.gov.uk/Line/Mode/tube/Status");
-    data.forEach(l=>{
-      const s=l.lineStatuses?.[0];
-      const d=s?.statusSeverityDescription||"Unknown";
-      host.insertAdjacentHTML("beforeend",`
-        <div class="statusRow">
-          <div>
-            <b>${l.name}</b>
-            <div class="small">${s?.reason||""}</div>
-          </div>
-          <div class="badge ${sev(d)}">${d}</div>
-        </div>
-      `);
-    });
-  }catch{
-    host.innerHTML=`<div class="statusRow"><b>Error loading status</b></div>`;
-  }
-}
-
-/* ---------- main ---------- */
+/* ---------------- main ---------------- */
 async function run(){
   markers.clearLayers();
-  pubList.innerHTML="";
   chips.innerHTML="";
   info.innerHTML="";
+  closestPub.innerHTML="";
+  closestSpoons.innerHTML="";
 
   const pc=postcode.value.trim();
   if(!pc) return;
 
+  chips.appendChild(chip("📍 Locating postcode…"));
+
   const geo=await fetchJson(`https://api.postcodes.io/postcodes/${pc}`);
-  const {latitude,longitude}=geo.result;
+  const {latitude,longitude,postcode:p}=geo.result;
 
   const sp=await fetchJson(
-    `https://api.tfl.gov.uk/StopPoint?lat=${latitude}&lon=${longitude}&radius=1500&stopTypes=NaptanMetroStation`
+    `https://api.tfl.gov.uk/StopPoint?lat=${latitude}&lon=${longitude}&radius=1200&stopTypes=NaptanMetroStation`
   );
   const st=sp.stopPoints
     .map(s=>({...s,d:dist(latitude,longitude,s.lat,s.lon)}))
     .sort((a,b)=>a.d-b.d)[0];
 
+  chips.innerHTML="";
+  chips.append(
+    chip(`🚇 ${st.commonName}`),
+    chip(`📍 ${p}`)
+  );
+
   const over=await fetchJson(
     `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(`
-      [out:json];
-      (node["amenity"="pub"](around:1500,${st.lat},${st.lon});
-       way["amenity"="pub"](around:1500,${st.lat},${st.lon}););
-      out center tags;
+      [out:json][timeout:10];
+      node["amenity"="pub"](around:900,${st.lat},${st.lon});
+      out tags center 25;
     `)}`
   );
 
   const pubs=over.elements.map(e=>{
-    const lat=e.lat??e.center?.lat;
-    const lon=e.lon??e.center?.lon;
-    if(!lat||!lon) return null;
+    if(!e.lat||!e.lon) return null;
     return{
       name:e.tags?.name||"Unnamed pub",
-      opening:e.tags?.opening_hours,
-      lat,lon,
-      d:dist(st.lat,st.lon,lat,lon)
+      lat:e.lat,lon:e.lon,
+      d:dist(st.lat,st.lon,e.lat,e.lon)
     };
   }).filter(Boolean).sort((a,b)=>a.d-b.d);
 
-  const top5=pubs.slice(0,5);
-  const density=pubs.filter(p=>p.d<=800).length;
+  const pub=pubs[0];
   const spoons=pubs.find(p=>isSpoons(p.name));
-
-  chips.append(
-    chip(`🚇 ${st.commonName}`),
-    chip(`🍺 ${density} pubs within 10 min`),
-    spoons?chip(`🍻 Spoons ${m(spoons.d)}`):""
-  );
-
-  info.innerHTML=`Station distance: ${m(st.d)}`;
 
   markers.addLayer(L.marker([latitude,longitude]).bindPopup("Postcode"));
   markers.addLayer(L.marker([st.lat,st.lon]).bindPopup(st.commonName));
 
-  top5.forEach((p,i)=>{
-    markers.addLayer(L.marker([p.lat,p.lon]).bindPopup(p.name));
-    const dirS=`https://www.google.com/maps/dir/?api=1&origin=${st.lat},${st.lon}&destination=${p.lat},${p.lon}&travelmode=walking`;
-    const dirU=`https://www.google.com/maps/dir/?api=1&origin=${latitude},${longitude}&destination=${p.lat},${p.lon}&travelmode=walking`;
-    const open=`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`;
-    pubList.insertAdjacentHTML("beforeend",`
-      <div class="pub">
-        <b>${i+1}. ${p.name}</b><br>
-        <span class="small">${m(p.d)} from station</span>
-        ${p.opening?`<div class="small">🕒 ${p.opening}</div>`:""}
-        <div class="row" style="margin-top:6px">
-          <a href="${dirS}" target="_blank">🚶 Station → Pub</a>
-          <a href="${dirU}" target="_blank">🚶 Postcode → Pub</a>
-          <a href="${open}" target="_blank">📍 Maps</a>
-        </div>
-      </div>
-    `);
-  });
+  if(pub){
+    markers.addLayer(L.marker([pub.lat,pub.lon]).bindPopup(pub.name));
+    closestPub.innerHTML=renderPub("Closest pub",pub,st,{latitude,longitude});
+  }
 
-  map.fitBounds(markers.getBounds().pad(0.25));
+  if(spoons){
+    markers.addLayer(L.marker([spoons.lat,spoons.lon]).bindPopup(spoons.name));
+    closestSpoons.innerHTML=renderPub("Closest Wetherspoons",spoons,st,{latitude,longitude});
+  }
+
+  map.fitBounds(markers.getBounds().pad(0.3));
 }
 
-/* ---------- wiring ---------- */
-go.onclick=run;
-postcode.addEventListener("keydown",e=>e.key==="Enter"&&run());
-refreshStatus.onclick=loadTubeStatus;
-loadTubeStatus();
+function renderPub(title,pub,st,user){
+  const dirS=`https://www.google.com/maps/dir/?api=1&origin=${st.lat},${st.lon}&destination=${pub.lat},${pub.lon}&travelmode=walking`;
+  const dirU=`https://www.google.com/maps/dir/?api=1&origin=${user.latitude},${user.longitude}&destination=${pub.lat},${pub.lon}&travelmode=walking`;
+  const open=`https://www.google.com/maps/search/?api=1&query=${pub.lat},${pub.lon}`;
+
+  return `
+    <b>${title}</b><br>
+    <b>${pub.name}</b><br>
+    <span class="small">${m(pub.d)} from station</span>
+    <div class="row" style="margin-top:6px">
+      <a href="${dirS}" target="_blank">🚶 Station → Pub</a>
+      <a href="${dirU}" target="_blank">🚶 Postcode → Pub</a>
+      <a href="${open}" target="_blank">📍 Maps</a>
+    </div>
+  `;
+}
 
 function chip(t){
   const s=document.createElement("span");
@@ -304,6 +239,9 @@ function chip(t){
   s.textContent=t;
   return s;
 }
+
+go.onclick=run;
+postcode.addEventListener("keydown",e=>e.key==="Enter"&&run());
 </script>
 </body>
 </html>
