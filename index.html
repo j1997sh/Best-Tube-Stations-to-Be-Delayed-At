@@ -3,9 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Tube delays + pubs + Wetherspoons + pub crawl + weather</title>
+  <title>London Now: Tube + Pubs + Wetherspoons + Weather + Crawl</title>
 
-  <!-- Leaflet (map) -->
+  <!-- Leaflet -->
   <link
     rel="stylesheet"
     href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
@@ -19,411 +19,569 @@
   ></script>
 
   <style>
-    :root { color-scheme: light dark; }
-    body {
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      line-height: 1.35;
-    }
-    header {
-      padding: 16px 16px 8px;
-      border-bottom: 1px solid rgba(127,127,127,.25);
-    }
-    h1 { margin: 0 0 8px; font-size: 18px; }
-    .sub { opacity: .8; font-size: 13px; margin: 0 0 12px; }
+    :root{
+      color-scheme: light dark;
 
-    .controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin: 8px 0 0;
-      align-items: center;
+      --tfl-blue:#0019a8;
+      --tfl-red:#dc241f;
+
+      --bg:#070a13;
+      --text:rgba(255,255,255,.92);
+      --muted:rgba(255,255,255,.70);
+      --muted2:rgba(255,255,255,.55);
+      --panel:rgba(255,255,255,.06);
+      --panel2:rgba(255,255,255,.08);
+      --border:rgba(255,255,255,.12);
+      --shadow: 0 16px 44px rgba(0,0,0,.38);
+
+      --ok:#1bd760;
+      --warn:#ffb020;
+      --bad:#ff453a;
+
+      --radius:18px;
+      --radius2:14px;
     }
-    button, select, input[type="number"] {
+
+    @media (prefers-color-scheme: light){
+      :root{
+        --bg:#f6f7fb;
+        --text:rgba(0,0,0,.88);
+        --muted:rgba(0,0,0,.62);
+        --muted2:rgba(0,0,0,.52);
+        --panel:rgba(0,0,0,.04);
+        --panel2:rgba(0,0,0,.06);
+        --border:rgba(0,0,0,.10);
+        --shadow: 0 16px 44px rgba(0,0,0,.12);
+      }
+    }
+
+    *{ box-sizing:border-box; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background:
+        radial-gradient(1100px 600px at 18% -10%, rgba(0,25,168,.25), transparent 60%),
+        radial-gradient(900px 520px at 100% 0%, rgba(220,36,31,.18), transparent 60%),
+        radial-gradient(900px 520px at 55% 110%, rgba(27,215,96,.14), transparent 60%),
+        var(--bg);
+      color:var(--text);
+    }
+
+    header{
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      padding: 16px 16px 10px;
+      backdrop-filter: blur(14px);
+      background: linear-gradient(to bottom, rgba(0,0,0,.35), rgba(0,0,0,.00));
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+
+    .topline{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:14px;
+      flex-wrap:wrap;
+    }
+
+    .brand{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      min-width: 280px;
+    }
+
+    .roundel{
+      width: 38px; height: 38px;
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(0,25,168,.95), rgba(0,25,168,.55));
+      border: 1px solid rgba(255,255,255,.18);
+      box-shadow: var(--shadow);
+      position: relative;
+      flex: 0 0 auto;
+      overflow: hidden;
+    }
+    .roundel:before{
+      content:"";
+      position:absolute;
+      inset: 8px;
+      border-radius:999px;
+      border: 6px solid rgba(220,36,31,.98);
+      background: rgba(255,255,255,.88);
+      opacity:.85;
+    }
+
+    h1{
+      margin:0;
+      font-size: 16px;
+      letter-spacing: .2px;
+      line-height:1.15;
+    }
+    .subtitle{
+      margin: 3px 0 0;
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+
+    .controls{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+
+    button, select, input[type="number"]{
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,.06));
+      color: var(--text);
       padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid rgba(127,127,127,.35);
-      background: rgba(127,127,127,.12);
-      cursor: pointer;
-      font-weight: 600;
+      border-radius: 999px;
+      cursor:pointer;
+      font-weight: 800;
+      letter-spacing: .2px;
+      box-shadow: 0 10px 26px rgba(0,0,0,.12);
+      transition: transform .08s ease, border-color .2s ease;
     }
-    input[type="checkbox"] { transform: scale(1.1); }
-    button:disabled { opacity: .5; cursor: not-allowed; }
-    main {
-      display: grid;
-      grid-template-columns: 1.1fr .9fr;
-      gap: 12px;
-      padding: 12px 16px 16px;
+    button:hover, select:hover, input[type="number"]:hover{
+      transform: translateY(-1px);
+      border-color: rgba(255,255,255,.22);
     }
-    #map { height: 72vh; min-height: 440px; border-radius: 14px; overflow: hidden; }
-    .panel {
-      border: 1px solid rgba(127,127,127,.25);
-      border-radius: 14px;
+    button:disabled, select:disabled, input[type="number"]:disabled{
+      opacity:.5;
+      cursor:not-allowed;
+      transform:none;
+    }
+
+    .statusline{
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    main{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap: 14px;
+      padding: 14px 16px 16px;
+    }
+
+    #map{
+      height: 76vh;
+      min-height: 480px;
+      border-radius: var(--radius);
+      overflow:hidden;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      background: rgba(255,255,255,.04);
+    }
+
+    .panel{
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--panel);
+      box-shadow: var(--shadow);
       padding: 12px;
-      background: rgba(127,127,127,.06);
-      overflow: auto;
-      max-height: 72vh;
+      overflow:auto;
+      max-height: 76vh;
     }
-    .card {
-      border: 1px solid rgba(127,127,127,.25);
-      border-radius: 12px;
-      padding: 10px;
+
+    .card{
+      border: 1px solid var(--border);
+      border-radius: var(--radius2);
+      background: var(--panel2);
+      padding: 12px;
       margin: 10px 0;
-      background: rgba(127,127,127,.06);
     }
-    .row { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: center; }
-    .muted { opacity: .8; font-size: 13px; }
-    .ok { color: #1b8f3a; font-weight: 800; }
-    .bad { color: #c0352b; font-weight: 900; }
-    .warn { color: #b97a00; font-weight: 900; }
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
+
+    .row{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+
+    .muted{ color: var(--muted); }
+    .muted2{ color: var(--muted2); }
+    .small{ font-size: 12px; }
+    .kpi{ font-weight: 900; }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
       padding: 6px 10px;
       border-radius: 999px;
-      border: 1px solid rgba(127,127,127,.35);
-      background: rgba(127,127,127,.10);
-      font-size: 13px;
-      font-weight: 800;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.08);
+      font-size: 12.5px;
+      font-weight: 900;
+      letter-spacing: .2px;
+      white-space: nowrap;
     }
-    .pill.ok { border-color: rgba(27,143,58,.5); }
-    .pill.bad { border-color: rgba(192,53,43,.5); }
-    .pill.warn { border-color: rgba(185,122,0,.5); }
+    .pill.ok{ color: var(--ok); border-color: rgba(27,215,96,.35); }
+    .pill.warn{ color: var(--warn); border-color: rgba(255,176,32,.35); }
+    .pill.bad{ color: var(--bad); border-color: rgba(255,69,58,.35); }
 
-    a { color: inherit; }
-    code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-
-    .list {
-      margin: 8px 0 0;
-      padding: 0;
-      list-style: none;
+    .grid2{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
     }
-    .list li {
-      padding: 8px 0;
-      border-top: 1px solid rgba(127,127,127,.18);
-    }
-    .list li:first-child { border-top: 0; }
-    .small { font-size: 12px; opacity: .85; }
-    .kpi { font-weight: 900; }
 
-    .filters {
-      display: grid;
+    .filters{
+      display:grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
-      margin-top: 8px;
+      margin-top: 10px;
     }
-    .filters label {
-      display: flex;
+    .filters label{
+      display:flex;
+      align-items:center;
       gap: 8px;
-      align-items: center;
-      padding: 8px 10px;
-      border-radius: 12px;
-      border: 1px solid rgba(127,127,127,.22);
-      background: rgba(127,127,127,.06);
-      user-select: none;
+      padding: 10px 10px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,.06);
+      user-select:none;
+      font-weight: 800;
+      letter-spacing: .15px;
     }
-    .filters .wide { grid-column: 1 / -1; }
+    input[type="checkbox"]{ transform: scale(1.12); }
 
-    @media (max-width: 900px) {
-      main { grid-template-columns: 1fr; }
-      #map, .panel { max-height: none; height: 55vh; }
-      .filters { grid-template-columns: 1fr; }
+    .list{
+      list-style:none;
+      padding:0;
+      margin: 10px 0 0;
     }
+    .list li{
+      padding: 10px 0;
+      border-top: 1px solid rgba(127,127,127,.22);
+    }
+    .list li:first-child{ border-top: 0; }
+
+    a{ color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+    a:hover{ opacity: .9; }
+
+    @media (max-width: 980px){
+      main{ grid-template-columns: 1fr; }
+      #map, .panel{ max-height:none; height: 56vh; }
+      .filters{ grid-template-columns: 1fr; }
+      .grid2{ grid-template-columns: 1fr; }
+    }
+
+    .leaflet-popup-content-wrapper{ border-radius: 14px !important; }
   </style>
 </head>
-
 <body>
-  <header>
-    <h1>Tube delays + closest pub + closest Wetherspoons + pub crawl + weather</h1>
-    <p class="sub">
-      Uses your device location (with permission), TfL line status, OpenStreetMap (Overpass) for places, and Open-Meteo for weather.
-    </p>
+<header>
+  <div class="topline">
+    <div class="brand">
+      <div class="roundel" aria-hidden="true"></div>
+      <div>
+        <h1>London Now</h1>
+        <div class="subtitle">Tube status · nearest station/line · pubs · Wetherspoons · weather · pub crawl</div>
+      </div>
+    </div>
 
     <div class="controls">
-      <button id="btnLocate">📍 Get my location</button>
-      <button id="btnRefresh" disabled>🔄 Refresh all</button>
-      <button id="btnFollow" disabled>🧭 Follow me (watch)</button>
-      <button id="btnStopWatch" disabled>🛑 Stop watch</button>
+      <button id="btnLocate">📍 Locate</button>
+      <button id="btnRefresh" disabled>🔄 Refresh</button>
+      <button id="btnFollow" disabled>🧭 Watch</button>
+      <button id="btnStopWatch" disabled>🛑 Stop</button>
+    </div>
+  </div>
 
-      <span class="muted" style="margin-left:auto"></span>
+  <div id="status" class="statusline">Click “Locate” to begin.</div>
+</header>
+
+<main>
+  <div id="map"></div>
+
+  <div class="panel">
+    <div class="card">
+      <div class="row">
+        <strong>Your location</strong>
+        <span id="coords" class="muted">—</span>
+      </div>
+      <div id="address" class="muted" style="margin-top:6px;">—</div>
     </div>
 
-    <p id="status" class="muted" style="margin: 10px 0 0;"></p>
-  </header>
+    <div class="card">
+      <div class="row">
+        <strong>Weather</strong>
+        <span id="wxUpdated" class="muted small">—</span>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <div id="wxSummary" class="muted">—</div>
+        <div id="beerGardenBadge"></div>
+      </div>
+      <div id="wxDetails" class="muted2 small" style="margin-top:6px;">—</div>
+    </div>
 
-  <main>
-    <div id="map"></div>
+    <div class="card">
+      <div class="row">
+        <strong>Nearest Tube station</strong>
+        <span id="stationMeta" class="muted small">—</span>
+      </div>
+      <div id="nearestStation" class="muted" style="margin-top:10px;">—</div>
+      <div id="nearestLines" class="muted2 small" style="margin-top:6px;">—</div>
+    </div>
 
-    <div class="panel">
-      <div class="card">
-        <div class="row">
-          <strong>Your location</strong>
-          <span id="coords" class="muted">—</span>
-        </div>
-        <div id="address" class="muted" style="margin-top: 6px;">—</div>
+    <div class="card">
+      <div class="row">
+        <strong>Places</strong>
+        <span id="placesMeta" class="muted small">—</span>
       </div>
 
-      <div class="card">
-        <div class="row">
-          <strong>Weather</strong>
-          <span id="wxUpdated" class="muted">—</span>
-        </div>
-        <div class="row" style="margin-top: 8px;">
-          <div id="wxSummary" class="muted">—</div>
-          <div id="beerGardenBadge"></div>
-        </div>
-        <div id="wxDetails" class="muted small" style="margin-top: 6px;">—</div>
-      </div>
+      <div class="grid2">
+        <label class="pill" style="justify-content:space-between;">
+          <span>Radius</span>
+          <span style="display:flex; gap:8px; align-items:center;">
+            <input id="radiusMeters" type="number" min="300" max="5000" step="100" value="1500" style="width:110px; border-radius:999px; padding:8px 10px;">
+            <span class="muted2 small">m</span>
+          </span>
+        </label>
 
-      <div class="card">
-        <div class="row">
-          <strong>Places</strong>
-          <span class="muted" id="placesMeta">—</span>
-        </div>
-
-        <div class="filters">
-          <label><input type="checkbox" id="f_pub" checked /> Pub</label>
-          <label><input type="checkbox" id="f_bar" checked /> Bar</label>
-
-          <label><input type="checkbox" id="f_beergarden" /> Beer garden</label>
-          <label><input type="checkbox" id="f_realale" /> Real ale (CAMRA-ish)</label>
-
-          <label><input type="checkbox" id="f_food" /> Food</label>
-          <label><input type="checkbox" id="f_latelicense" /> Late licence (best effort)</label>
-
-          <label class="wide">
-            Radius:
-            <input type="number" id="radiusMeters" min="300" max="5000" step="100" value="1500" />
-            <span class="muted">meters</span>
-          </label>
-        </div>
-
-        <div class="controls" style="margin-top: 10px;">
-          <button id="btnApplyFilters" disabled>🎛️ Apply filters</button>
-          <button id="btnPubCrawl" disabled>🍻 Generate pub crawl</button>
-          <select id="crawlCount" disabled>
-            <option value="3">3 stops</option>
-            <option value="4" selected>4 stops</option>
-            <option value="5">5 stops</option>
+        <label class="pill" style="justify-content:space-between;">
+          <span>Crawl stops</span>
+          <select id="crawlCount" disabled style="padding:8px 10px;">
+            <option value="3">3</option>
+            <option value="4" selected>4</option>
+            <option value="5">5</option>
           </select>
-        </div>
-
-        <div id="closestResults" class="muted" style="margin-top: 10px;">—</div>
-
-        <div style="margin-top: 10px;">
-          <strong>Nearby list (top 10)</strong>
-          <ul id="nearbyList" class="list muted"></ul>
-        </div>
-
-        <div style="margin-top: 10px;">
-          <strong>Pub crawl</strong>
-          <div id="crawlResults" class="muted" style="margin-top: 8px;">—</div>
-        </div>
+        </label>
       </div>
 
-      <div class="card">
-        <div class="row">
-          <strong>Tube status (TfL)</strong>
-          <span class="muted" id="tflUpdated">—</span>
-        </div>
-        <div id="tubeStatus" class="muted" style="margin-top: 8px;">—</div>
+      <div class="filters">
+        <label><input type="checkbox" id="f_pub" checked> Pub</label>
+        <label><input type="checkbox" id="f_bar" checked> Bar</label>
+        <label><input type="checkbox" id="f_beergarden"> Beer garden</label>
+        <label><input type="checkbox" id="f_realale"> Real ale (best-effort)</label>
+        <label><input type="checkbox" id="f_food"> Food</label>
+        <label><input type="checkbox" id="f_latelicense"> Late (opening_hours heuristic)</label>
       </div>
 
-      <div class="card">
-        <strong>Debug / reliability</strong>
-        <div class="muted" style="margin-top: 6px;">
-          Geolocation requires <code>https://</code> (or <code>http://localhost</code>).<br/>
-          Pub data comes from Overpass (often rate-limited). This app uses fallback servers + caching, so “closest pub” still works even if Overpass is busy.
-        </div>
+      <div class="controls" style="margin-top:12px;">
+        <button id="btnApplyFilters" disabled>🎛️ Apply</button>
+        <button id="btnPubCrawl" disabled>🍻 Pub crawl</button>
+      </div>
+
+      <div id="closestResults" class="muted" style="margin-top:12px;">—</div>
+
+      <div style="margin-top: 12px;">
+        <strong>Nearby (top 10)</strong>
+        <ul id="nearbyList" class="list muted"></ul>
+      </div>
+
+      <div style="margin-top:12px;">
+        <strong>Pub crawl</strong>
+        <div id="crawlResults" class="muted" style="margin-top:10px;">—</div>
       </div>
     </div>
-  </main>
 
-  <script>
-    // =========================================================
-    // Helpers
-    // =========================================================
-    const $ = (id) => document.getElementById(id);
+    <div class="card">
+      <div class="row">
+        <strong>Tube status</strong>
+        <span id="tflUpdated" class="muted small">—</span>
+      </div>
+      <div id="tubeStatus" class="muted" style="margin-top:10px;">—</div>
+    </div>
 
-    function setStatus(msg) { $("status").textContent = msg; }
+    <div class="card">
+      <strong>Legend</strong>
+      <div class="muted2 small" style="margin-top:8px; display:flex; gap:10px; flex-wrap:wrap;">
+        <span class="pill">🟦 You</span>
+        <span class="pill">Ⓜ️ Station</span>
+        <span class="pill">🍺 Closest pub</span>
+        <span class="pill">🍻 Wetherspoons</span>
+        <span class="pill">— Crow-fly line to closest pub</span>
+      </div>
+      <div class="muted2 small" style="margin-top:8px;">
+        Note: pub data uses Overpass (often rate-limited). This site uses fallback servers + caching so “closest pub” usually still appears.
+      </div>
+    </div>
+  </div>
+</main>
+<script>
+  // Helpers
+  const $ = (id) => document.getElementById(id);
+  const setStatus = (msg) => { $("status").textContent = msg; };
 
-    function haversineMeters(lat1, lon1, lat2, lon2) {
-      const R = 6371000;
-      const toRad = (d) => d * Math.PI / 180;
-      const dLat = toRad(lat2 - lat1);
-      const dLon = toRad(lon2 - lon1);
-      const a =
-        Math.sin(dLat/2) ** 2 +
-        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) ** 2;
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return R * c;
+  function haversineMeters(lat1, lon1, lat2, lon2){
+    const R = 6371000;
+    const toRad = (d) => d * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a =
+      Math.sin(dLat/2) ** 2 +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+  function fmtDistance(m){
+    if (!isFinite(m)) return "—";
+    if (m < 1000) return `${Math.round(m)} m`;
+    return `${(m/1000).toFixed(2)} km`;
+  }
+  function safeText(v){ return (v === null || v === undefined || v === "") ? "—" : String(v); }
+
+  function googleDirectionsLinkSingle(lat, lon){
+    return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lat + "," + lon)}&travelmode=walking`;
+  }
+  function googleDirectionsLinkWithWaypoints(originLat, originLon, stops){
+    if (!stops || stops.length < 2) return googleDirectionsLinkSingle(stops?.[0]?.lat, stops?.[0]?.lon);
+    const origin = `${originLat},${originLon}`;
+    const destination = `${stops[stops.length - 1].lat},${stops[stops.length - 1].lon}`;
+    const waypoints = stops.slice(0, -1).map(s => `${s.lat},${s.lon}`).join("|");
+    const params = new URLSearchParams({ api:"1", origin, destination, travelmode:"walking", waypoints });
+    return `https://www.google.com/maps/dir/?${params.toString()}`;
+  }
+  function pill(text, cls){ return `<span class="pill ${cls || ""}">${text}</span>`; }
+
+  // TfL-ish tube colours (approx)
+  const TUBE_LINE_COLOURS = {
+    "bakerloo": "#B36305",
+    "central": "#E32017",
+    "circle": "#FFD300",
+    "district": "#00782A",
+    "hammersmith-city": "#F3A9BB",
+    "jubilee": "#A0A5A9",
+    "metropolitan": "#9B0056",
+    "northern": "#000000",
+    "piccadilly": "#003688",
+    "victoria": "#0098D4",
+    "waterloo-city": "#95CDBA",
+    "elizabeth": "#6950a1",
+    "dlr": "#00A4A7",
+    "london-overground": "#EE7C0E"
+  };
+  function lineColourForIds(lineIds){
+    for (const id of (lineIds || [])){
+      if (TUBE_LINE_COLOURS[id]) return TUBE_LINE_COLOURS[id];
     }
+    return getComputedStyle(document.documentElement).getPropertyValue("--tfl-blue").trim() || "#0019a8";
+  }
 
-    function fmtDistance(m) {
-      if (!isFinite(m)) return "—";
-      if (m < 1000) return `${Math.round(m)} m`;
-      return `${(m / 1000).toFixed(2)} km`;
-    }
+  // Map
+  const map = L.map("map").setView([51.5074, -0.1278], 12);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
 
-    function safeText(v) { return (v === null || v === undefined || v === "") ? "—" : String(v); }
-
-    function googleDirectionsLinkSingle(lat, lon) {
-      // Walking directions from current location to destination
-      return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lat + "," + lon)}&travelmode=walking`;
-    }
-
-    function googleDirectionsLinkWithWaypoints(originLat, originLon, stops) {
-      // Google supports "waypoints" (pipe-separated). There are practical limits; we keep it small (<= 5).
-      // Route: origin -> ...waypoints... -> destination (last stop).
-      if (!stops || stops.length < 2) return googleDirectionsLinkSingle(stops?.[0]?.lat, stops?.[0]?.lon);
-
-      const origin = `${originLat},${originLon}`;
-      const destination = `${stops[stops.length - 1].lat},${stops[stops.length - 1].lon}`;
-      const middle = stops.slice(0, -1).map(s => `${s.lat},${s.lon}`).join("|");
-
-      const params = new URLSearchParams({
-        api: "1",
-        origin,
-        destination,
-        travelmode: "walking",
-        waypoints: middle
-      });
-
-      return `https://www.google.com/maps/dir/?${params.toString()}`;
-    }
-
-    function pill(text, cls) {
-      return `<span class="pill ${cls}">${text}</span>`;
-    }
-
-    // =========================================================
-    // Map
-    // =========================================================
-    const map = L.map("map").setView([51.5074, -0.1278], 12);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: '&copy; OpenStreetMap contributors'
+  function circleMarker(lat, lon, colour, label){
+    const m = L.circleMarker([lat, lon], {
+      radius: 9,
+      color: colour,
+      weight: 3,
+      fillColor: colour,
+      fillOpacity: 0.9
     }).addTo(map);
+    if (label) m.bindPopup(label);
+    return m;
+  }
 
-    let meMarker = null;
-    let pubMarker = null;
-    let spoonsMarker = null;
-    let placesMarkers = []; // pins for list/crawl
-    let watchId = null;
+  let meMarker = null, stationMarker = null, pubMarker = null, spoonsMarker = null;
+  let listMarkers = [], crawlMarkers = [];
+  let crowFlyLine = null;
+  const clearLayers = (arr) => { for (const l of arr) map.removeLayer(l); arr.length = 0; };
+  const clearLine = () => { if (crowFlyLine){ map.removeLayer(crowFlyLine); crowFlyLine = null; } };
 
-    function clearMarkers(list) {
-      for (const m of list) map.removeLayer(m);
-      list.length = 0;
-    }
+  // State
+  let lastLat = null, lastLon = null, lastAcc = null;
+  let watchId = null;
 
-    function putMarker(existing, lat, lon, label) {
-      if (existing) map.removeLayer(existing);
-      return L.marker([lat, lon]).addTo(map).bindPopup(label);
-    }
+  // Places reliability: throttle + cache
+  let lastPlacesFetchAt = 0;
+  const PLACES_COOLDOWN_MS = 20000;
+  const CACHE_TTL_MS = 10 * 60 * 1000;
+  let placesRaw = [];
+  let placesSource = "—";
+  let placesFetchedAt = 0;
 
-    // =========================================================
-    // State
-    // =========================================================
-    let lastLat = null;
-    let lastLon = null;
-    let lastAcc = null;
+  // Nearest station state
+  let nearestStation = null;
 
-    let lastPlacesFetchAt = 0; // throttle Overpass calls
-    const PLACES_COOLDOWN_MS = 20000; // a bit less strict than 30s + caching helps
-    const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+  // Networking
+  async function reverseGeocode(lat, lon){
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
+    const res = await fetch(url, { headers: { "Accept":"application/json" } });
+    if (!res.ok) throw new Error(`Reverse geocode failed: ${res.status}`);
+    return await res.json();
+  }
 
-    // We cache raw elements and re-filter client-side
-    let placesRaw = []; // normalized list of places (pubs/bars) near you
-    let placesSource = "—"; // "live" or "cache"
-    let placesFetchedAt = 0;
+  async function fetchTubeStatus(){
+    const url = "https://api.tfl.gov.uk/Line/Mode/tube/Status";
+    const res = await fetch(url, { headers: { "Accept":"application/json" } });
+    if (!res.ok) throw new Error(`TfL status failed: ${res.status}`);
+    return await res.json();
+  }
 
-    // =========================================================
-    // Networking
-    // =========================================================
-    async function reverseGeocode(lat, lon) {
-      const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
-      const res = await fetch(url, { headers: { "Accept": "application/json" } });
-      if (!res.ok) throw new Error(`Reverse geocode failed: ${res.status}`);
-      return await res.json();
-    }
+  async function fetchNearestStations(lat, lon){
+    const url = new URL("https://api.tfl.gov.uk/StopPoint");
+    url.searchParams.set("lat", lat);
+    url.searchParams.set("lon", lon);
+    url.searchParams.set("stopTypes", "NaptanMetroStation");
+    url.searchParams.set("radius", "1500");
+    const res = await fetch(url.toString(), { headers: { "Accept":"application/json" } });
+    if (!res.ok) throw new Error(`TfL StopPoint failed: ${res.status}`);
+    return await res.json();
+  }
 
-    async function fetchTubeStatus() {
-      const url = "https://api.tfl.gov.uk/Line/Mode/tube/Status";
-      const res = await fetch(url, { headers: { "Accept": "application/json" } });
-      if (!res.ok) throw new Error(`TfL status failed: ${res.status}`);
-      return await res.json();
-    }
+  async function fetchWeather(lat, lon){
+    const url = new URL("https://api.open-meteo.com/v1/forecast");
+    url.searchParams.set("latitude", lat);
+    url.searchParams.set("longitude", lon);
+    url.searchParams.set("current", "temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m");
+    url.searchParams.set("hourly", "precipitation,temperature_2m,wind_speed_10m");
+    url.searchParams.set("forecast_hours", "6");
+    url.searchParams.set("timezone", "auto");
+    const res = await fetch(url.toString(), { headers: { "Accept":"application/json" } });
+    if (!res.ok) throw new Error(`Weather failed: ${res.status}`);
+    return await res.json();
+  }
 
-    async function fetchWeather(lat, lon) {
-      // Open-Meteo: no key needed
-      // We pull current weather and next few hours precip/wind/temp.
-      const url = new URL("https://api.open-meteo.com/v1/forecast");
-      url.searchParams.set("latitude", lat);
-      url.searchParams.set("longitude", lon);
-      url.searchParams.set("current", "temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m");
-      url.searchParams.set("hourly", "precipitation,temperature_2m,wind_speed_10m");
-      url.searchParams.set("forecast_hours", "6");
-      url.searchParams.set("timezone", "auto");
+  async function overpassQuery(query){
+    const endpoints = [
+      "https://overpass-api.de/api/interpreter",
+      "https://overpass.kumi.systems/api/interpreter",
+      "https://overpass.openstreetmap.ru/api/interpreter",
+      "https://lz4.overpass-api.de/api/interpreter"
+    ];
+    const timeoutMs = 15000;
+    let lastErr = null;
 
-      const res = await fetch(url.toString(), { headers: { "Accept": "application/json" } });
-      if (!res.ok) throw new Error(`Weather failed: ${res.status}`);
-      return await res.json();
-    }
-
-    async function overpassQuery(query) {
-      const endpoints = [
-        "https://overpass-api.de/api/interpreter",
-        "https://overpass.kumi.systems/api/interpreter",
-        "https://overpass.openstreetmap.ru/api/interpreter",
-        "https://lz4.overpass-api.de/api/interpreter"
-      ];
-
-      const timeoutMs = 15000;
-      let lastErr = null;
-
-      for (const url of endpoints) {
-        const controller = new AbortController();
-        const t = setTimeout(() => controller.abort(), timeoutMs);
-
-        try {
-          const res = await fetch(url, {
-            method: "POST",
-            body: query,
-            headers: { "Content-Type": "text/plain;charset=UTF-8" },
-            signal: controller.signal
-          });
-
-          clearTimeout(t);
-
-          if (!res.ok) {
-            const msg = await res.text().catch(() => "");
-            throw new Error(`Overpass ${res.status} from ${url}${msg ? " — " + msg.slice(0, 140) : ""}`);
-          }
-
-          return await res.json();
-        } catch (e) {
-          clearTimeout(t);
-          lastErr = e;
-          console.warn("Overpass failed, trying next endpoint:", url, e);
+    for (const url of endpoints){
+      const controller = new AbortController();
+      const t = setTimeout(() => controller.abort(), timeoutMs);
+      try{
+        const res = await fetch(url, {
+          method: "POST",
+          body: query,
+          headers: { "Content-Type":"text/plain;charset=UTF-8" },
+          signal: controller.signal
+        });
+        clearTimeout(t);
+        if (!res.ok){
+          const msg = await res.text().catch(() => "");
+          throw new Error(`Overpass ${res.status} from ${url}${msg ? " — " + msg.slice(0, 140) : ""}`);
         }
+        return await res.json();
+      } catch(e){
+        clearTimeout(t);
+        lastErr = e;
+        console.warn("Overpass failed, trying next endpoint:", url, e);
       }
-      throw lastErr || new Error("All Overpass endpoints failed.");
     }
+    throw lastErr || new Error("All Overpass endpoints failed.");
+  }
 
-    // =========================================================
-    // Overpass: fetch pubs/bars + Wetherspoons candidates
-    // FIXING "closest pub issue":
-    //  - smaller radius default (user adjustable)
-    //  - caching in localStorage
-    //  - if Overpass fails, we fall back to cached results
-    //  - we fetch both pubs and bars so filters can work without requery
-    // =========================================================
-    function buildPlacesOverpassQuery(lat, lon, radius) {
-      // Grab pubs + bars, plus basic tags used for filters.
-      // Note: "out center tags;" gives center for ways/relations.
-      return `
+  // Places: Overpass + cache
+  function buildPlacesOverpassQuery(lat, lon, radius){
+    return `
 [out:json][timeout:25];
 (
   node(around:${radius},${lat},${lon})["amenity"="pub"];
@@ -434,676 +592,660 @@
   way(around:${radius},${lat},${lon})["amenity"="bar"];
   relation(around:${radius},${lat},${lon})["amenity"="bar"];
 );
-out center tags;
-      `.trim();
+out center tags;`.trim();
+  }
+  function extractElementLatLon(el){
+    if (el.type === "node") return { lat: el.lat, lon: el.lon };
+    if (el.center) return { lat: el.center.lat, lon: el.center.lon };
+    return null;
+  }
+  function normalizePlace(el){
+    const pos = extractElementLatLon(el);
+    if (!pos) return null;
+    const tags = el.tags || {};
+    return {
+      id: `${el.type}/${el.id}`,
+      lat: pos.lat,
+      lon: pos.lon,
+      amenity: (tags.amenity || "").toLowerCase(),
+      name: tags.name || tags.brand || tags.operator || "Unnamed place",
+      tags
+    };
+  }
+  function cacheKeyFor(lat, lon, radius){
+    const a = Math.round(lat * 1000);
+    const b = Math.round(lon * 1000);
+    return `places_cache_v3_${a}_${b}_${radius}`;
+  }
+  function loadPlacesCache(key){
+    try{
+      const raw = localStorage.getItem(key);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (!obj || !obj.places || !obj.fetchedAt) return null;
+      if ((Date.now() - obj.fetchedAt) > CACHE_TTL_MS) return null;
+      return obj;
+    } catch { return null; }
+  }
+  function savePlacesCache(key, obj){
+    try{ localStorage.setItem(key, JSON.stringify(obj)); } catch {}
+  }
+  function updatePlacesMeta(){
+    const when = placesFetchedAt ? new Date(placesFetchedAt).toLocaleTimeString() : "—";
+    $("placesMeta").textContent = `${placesRaw.length} places · ${placesSource} · ${when}`;
+  }
+
+  async function fetchPlacesWithCache(lat, lon, radius){
+    const key = cacheKeyFor(lat, lon, radius);
+    const cached = loadPlacesCache(key);
+
+    if (cached){
+      placesRaw = cached.places;
+      placesFetchedAt = cached.fetchedAt;
+      placesSource = "cache";
+      updatePlacesMeta();
     }
 
-    function extractElementLatLon(el) {
-      if (el.type === "node") return { lat: el.lat, lon: el.lon };
-      if (el.center) return { lat: el.center.lat, lon: el.center.lon };
-      return null;
+    const now = Date.now();
+    const allowNetwork = (now - lastPlacesFetchAt) > PLACES_COOLDOWN_MS;
+    if (!allowNetwork){
+      if (cached) return { source:"cache", usedCache:true, refreshed:false };
+      const wait = Math.ceil((PLACES_COOLDOWN_MS - (now - lastPlacesFetchAt))/1000);
+      throw new Error(`Throttled. Try again in ${wait}s.`);
     }
 
-    function normalizePlace(el) {
-      const pos = extractElementLatLon(el);
-      if (!pos) return null;
-      const tags = el.tags || {};
-      const amenity = tags.amenity || "";
-      const name = tags.name || tags.brand || tags.operator || "Unnamed place";
-      return {
-        id: `${el.type}/${el.id}`,
-        lat: pos.lat,
-        lon: pos.lon,
-        name,
-        amenity,
-        tags
-      };
+    lastPlacesFetchAt = now;
+    const q = buildPlacesOverpassQuery(lat, lon, radius);
+    const data = await overpassQuery(q);
+    const els = (data.elements || []).map(normalizePlace).filter(Boolean);
+
+    const uniq = new Map();
+    for (const p of els) uniq.set(p.id, p);
+
+    placesRaw = [...uniq.values()];
+    placesFetchedAt = Date.now();
+    placesSource = "live";
+
+    savePlacesCache(key, { places: placesRaw, fetchedAt: placesFetchedAt });
+    updatePlacesMeta();
+
+    return { source:"live", usedCache:!!cached, refreshed:true };
+  }
+    // Filters
+  function getFilters(){
+    return {
+      pub: $("f_pub").checked,
+      bar: $("f_bar").checked,
+      beerGarden: $("f_beergarden").checked,
+      realAle: $("f_realale").checked,
+      food: $("f_food").checked,
+      late: $("f_latelicense").checked,
+    };
+  }
+  function placeMatchesFilters(place, f){
+    const t = place.tags || {};
+    const amenity = (place.amenity || "").toLowerCase();
+
+    const amenityOk =
+      (f.pub && amenity === "pub") ||
+      (f.bar && amenity === "bar");
+    if (!amenityOk) return false;
+
+    if (f.beerGarden){
+      const bg =
+        (t.beer_garden || "").toLowerCase() === "yes" ||
+        (t.outdoor_seating || "").toLowerCase() === "yes" ||
+        (t.garden || "").toLowerCase() === "yes";
+      if (!bg) return false;
     }
 
-    function loadPlacesCache(cacheKey) {
-      try {
-        const raw = localStorage.getItem(cacheKey);
-        if (!raw) return null;
-        const obj = JSON.parse(raw);
-        if (!obj || !obj.places || !obj.fetchedAt) return null;
-        if ((Date.now() - obj.fetchedAt) > CACHE_TTL_MS) return null;
-        return obj;
-      } catch {
-        return null;
+    if (f.realAle){
+      const ra =
+        (t.real_ale || "").toLowerCase() === "yes" ||
+        (t.camra || "").toLowerCase() === "yes" ||
+        (t["drink:real_ale"] || "").toLowerCase() === "yes" ||
+        (t.brewery || "").toLowerCase() === "yes";
+      if (!ra) return false;
+    }
+
+    if (f.food){
+      const food =
+        (t.food || "").toLowerCase() === "yes" ||
+        (t.cuisine != null) ||
+        (t.restaurant || "").toLowerCase() === "yes";
+      if (!food) return false;
+    }
+
+    if (f.late){
+      const oh = (t.opening_hours || "").toLowerCase();
+      const lateHint = /24\/7|00:|01:|02:|03:/.test(oh);
+      if (!lateHint) return false;
+    }
+
+    return true;
+  }
+  function getFilteredPlaces(lat, lon){
+    const f = getFilters();
+    return placesRaw
+      .filter(p => placeMatchesFilters(p, f))
+      .map(p => ({ ...p, distanceMeters: haversineMeters(lat, lon, p.lat, p.lon) }))
+      .sort((a,b) => a.distanceMeters - b.distanceMeters);
+  }
+
+  // Wetherspoons detection
+  function isWetherspoons(place){
+    const t = place.tags || {};
+    const n = (t.name || place.name || "").toLowerCase();
+    const b = (t.brand || "").toLowerCase();
+    const o = (t.operator || "").toLowerCase();
+    return (
+      n.includes("wetherspoon") || n.includes("wetherspoons") || n.includes("jd wetherspoon") ||
+      b.includes("wetherspoon") || b.includes("wetherspoons") || b.includes("jd wetherspoon") ||
+      o.includes("wetherspoon") || o.includes("wetherspoons") || o.includes("jd wetherspoon")
+    );
+  }
+
+  // Nearest station
+  function extractLineIdsFromStop(stop){
+    const ids = [];
+    const names = [];
+    for (const l of (stop.lines || [])){
+      if (l?.id) ids.push(l.id);
+      if (l?.name) names.push(l.name);
+    }
+    return { ids, names };
+  }
+  async function computeNearestStation(lat, lon){
+    const data = await fetchNearestStations(lat, lon);
+    const stops = data.stopPoints || [];
+    if (!stops.length) return null;
+
+    let best = null;
+    for (const s of stops){
+      const d = haversineMeters(lat, lon, s.lat, s.lon);
+      if (!best || d < best.distanceMeters){
+        const lines = extractLineIdsFromStop(s);
+        best = {
+          name: s.commonName || s.stationName || "Station",
+          lat: s.lat,
+          lon: s.lon,
+          distanceMeters: d,
+          lineIds: lines.ids,
+          linesPretty: lines.names,
+          stationId: s.id
+        };
       }
     }
-
-    function savePlacesCache(cacheKey, obj) {
-      try { localStorage.setItem(cacheKey, JSON.stringify(obj)); } catch {}
+    return best;
+  }
+  function renderNearestStation(st){
+    if (!st){
+      $("nearestStation").textContent = "— (no stations found nearby)";
+      $("nearestLines").textContent = "—";
+      $("stationMeta").textContent = "—";
+      if (stationMarker) { map.removeLayer(stationMarker); stationMarker = null; }
+      return;
     }
 
-    async function fetchPlacesWithCache(lat, lon, radius) {
-      const cacheKey = `places_cache_v2_${Math.round(lat*1000)}_${Math.round(lon*1000)}_${radius}`;
-      const cached = loadPlacesCache(cacheKey);
+    const colour = lineColourForIds(st.lineIds);
+    if (stationMarker) map.removeLayer(stationMarker);
+    stationMarker = circleMarker(st.lat, st.lon, colour, `Nearest station: ${st.name}`);
 
-      const now = Date.now();
-      const allowNetwork = (now - lastPlacesFetchAt) > PLACES_COOLDOWN_MS;
+    const lineNames = (st.linesPretty && st.linesPretty.length) ? st.linesPretty.join(", ") : "—";
+    $("nearestStation").innerHTML = `
+      <div class="row">
+        <div><span class="kpi">${safeText(st.name)}</span></div>
+        <div class="muted">${fmtDistance(st.distanceMeters)}</div>
+      </div>
+      <div class="muted2 small" style="margin-top:6px;">
+        <a href="${googleDirectionsLinkSingle(st.lat, st.lon)}" target="_blank" rel="noreferrer">Google Maps walking directions</a>
+      </div>
+    `;
+    $("nearestLines").innerHTML = `<span class="pill" style="border-color:${colour}">Lines: ${safeText(lineNames)}</span>`;
+    $("stationMeta").textContent = new Date().toLocaleTimeString();
+  }
 
-      // Prefer fresh cache immediately (fast UI), then refresh in background if allowed
-      if (cached) {
-        placesRaw = cached.places;
-        placesFetchedAt = cached.fetchedAt;
+  // Weather render
+  function weatherCodeToText(code){
+    const m = {
+      0:"Clear", 1:"Mainly clear", 2:"Partly cloudy", 3:"Overcast",
+      45:"Fog", 48:"Rime fog",
+      51:"Light drizzle", 53:"Drizzle", 55:"Heavy drizzle",
+      61:"Light rain", 63:"Rain", 65:"Heavy rain",
+      71:"Light snow", 73:"Snow", 75:"Heavy snow",
+      80:"Rain showers", 81:"Rain showers", 82:"Violent showers",
+      95:"Thunderstorm"
+    };
+    return m[code] || `Weather code ${code}`;
+  }
+  function renderWeather(wx){
+    const cur = wx.current || {};
+    const temp = cur.temperature_2m;
+    const feels = cur.apparent_temperature;
+    const precipNow = cur.precipitation;
+    const wind = cur.wind_speed_10m;
+    const code = cur.weather_code;
+
+    const hourly = wx.hourly || {};
+    const precipNext = (hourly.precipitation || []).slice(0,3);
+    const tempNext = (hourly.temperature_2m || []).slice(0,3);
+    const next1 = precipNext[0] ?? 0;
+
+    let cls = "warn", txt = "Maybe beer garden";
+    if (temp >= 15 && next1 < 0.2 && wind < 12){ cls = "ok"; txt = "Beer garden viable ✅"; }
+    else if (temp < 12 || next1 >= 1.0 || wind >= 15){ cls = "bad"; txt = "Beer garden risk ❌"; }
+
+    $("beerGardenBadge").innerHTML = pill(txt, cls);
+    $("wxSummary").innerHTML = `<span class="kpi">${safeText(temp)}°C</span> <span class="muted2">feels ${safeText(feels)}°C</span> · ${weatherCodeToText(code)} · wind ${safeText(wind)} m/s`;
+    $("wxDetails").textContent = `Precip now: ${safeText(precipNow)} mm · Next hour: ${safeText(next1)} mm · Next temps: ${tempNext.join("/") || "—"} °C`;
+    $("wxUpdated").textContent = new Date().toLocaleString();
+  }
+
+  // Tube status render
+  function renderTubeStatus(lines){
+    const mapped = lines.map(l => {
+      const statuses = (l.lineStatuses || []).map(s => s.statusSeverityDescription).filter(Boolean);
+      const unique = [...new Set(statuses)];
+      const worst = unique.find(x => x !== "Good Service") || "Good Service";
+      return { name: l.name, id: (l.id||"").toLowerCase(), status: worst };
+    });
+
+    mapped.sort((a,b) => {
+      const aBad = a.status !== "Good Service";
+      const bBad = b.status !== "Good Service";
+      if (aBad !== bBad) return aBad ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    const html = mapped.map(x => {
+      const s = x.status.toLowerCase();
+      const cls = x.status === "Good Service" ? "ok" : (s.includes("minor") ? "warn" : "bad");
+      const colour = TUBE_LINE_COLOURS[x.id] || "rgba(127,127,127,.5)";
+      return `
+        <div class="row" style="margin:8px 0;">
+          <span style="display:flex; align-items:center; gap:10px;">
+            <span style="width:10px; height:10px; border-radius:999px; background:${colour}; border:1px solid rgba(255,255,255,.25);"></span>
+            <strong>${x.name}</strong>
+          </span>
+          <span class="pill ${cls}">${x.status}</span>
+        </div>
+      `;
+    }).join("");
+
+    $("tubeStatus").innerHTML = html || "No status available.";
+    $("tflUpdated").textContent = new Date().toLocaleString();
+  }
+
+  // Places render + crow-fly line
+  function renderClosestAndList(lat, lon){
+    const pubsOnly = placesRaw
+      .filter(p => (p.amenity || "").toLowerCase() === "pub")
+      .map(p => ({ ...p, distanceMeters: haversineMeters(lat, lon, p.lat, p.lon) }))
+      .sort((a,b) => a.distanceMeters - b.distanceMeters);
+
+    const spoonsOnly = placesRaw
+      .filter(isWetherspoons)
+      .map(p => ({ ...p, distanceMeters: haversineMeters(lat, lon, p.lat, p.lon) }))
+      .sort((a,b) => a.distanceMeters - b.distanceMeters);
+
+    const closestPub = pubsOnly[0] || null;
+    const closestSpoons = spoonsOnly[0] || null;
+
+    const YOU = "#0098D4";
+    const PUB = "#00782A";
+    const SPOONS = "#DC241F";
+    const BAR = "#EE7C0E";
+
+    if (meMarker) map.removeLayer(meMarker);
+    meMarker = circleMarker(lat, lon, YOU, "You");
+
+    if (pubMarker) map.removeLayer(pubMarker);
+    if (spoonsMarker) map.removeLayer(spoonsMarker);
+    clearLine();
+
+    const parts = [];
+    if (closestPub){
+      pubMarker = circleMarker(closestPub.lat, closestPub.lon, PUB, `Closest pub: ${closestPub.name}`);
+      crowFlyLine = L.polyline([[lat, lon],[closestPub.lat, closestPub.lon]], {
+        color: "#ffb020",
+        weight: 4,
+        opacity: 0.95,
+        dashArray: "10 8"
+      }).addTo(map);
+
+      parts.push(`
+        <div style="margin-bottom:12px;">
+          <div class="row">
+            <div><strong>Closest pub</strong>: ${safeText(closestPub.name)}</div>
+            <div class="muted">${fmtDistance(closestPub.distanceMeters)}</div>
+          </div>
+          <div class="muted2 small" style="margin-top:6px;">
+            <a href="${googleDirectionsLinkSingle(closestPub.lat, closestPub.lon)}" target="_blank" rel="noreferrer">Google Maps walking directions</a>
+          </div>
+        </div>
+      `);
+    } else {
+      parts.push(`<div><strong>Closest pub</strong>: — (no pubs returned)</div>`);
+    }
+
+    if (closestSpoons){
+      spoonsMarker = circleMarker(closestSpoons.lat, closestSpoons.lon, SPOONS, `Closest Wetherspoons: ${closestSpoons.name}`);
+      parts.push(`
+        <div>
+          <div class="row">
+            <div><strong>Closest Wetherspoons</strong>: ${safeText(closestSpoons.name)}</div>
+            <div class="muted">${fmtDistance(closestSpoons.distanceMeters)}</div>
+          </div>
+          <div class="muted2 small" style="margin-top:6px;">
+            <a href="${googleDirectionsLinkSingle(closestSpoons.lat, closestSpoons.lon)}" target="_blank" rel="noreferrer">Google Maps walking directions</a>
+          </div>
+        </div>
+      `);
+    } else {
+      parts.push(`<div style="margin-top:6px;"><strong>Closest Wetherspoons</strong>: —</div>`);
+    }
+
+    $("closestResults").innerHTML = parts.join("");
+
+    const filtered = getFilteredPlaces(lat, lon).slice(0, 10);
+    const ul = $("nearbyList");
+    ul.innerHTML = "";
+    clearLayers(listMarkers);
+
+    for (const p of filtered){
+      const t = p.tags || {};
+      const extras = [];
+      if ((t.outdoor_seating || "").toLowerCase() === "yes" || (t.beer_garden || "").toLowerCase() === "yes") extras.push("beer garden");
+      if ((t.real_ale || "").toLowerCase() === "yes" || (t.camra || "").toLowerCase() === "yes") extras.push("real ale");
+      if ((t.food || "").toLowerCase() === "yes") extras.push("food");
+      if (isWetherspoons(p)) extras.push("Wetherspoons");
+
+      const li = document.createElement("li");
+      li.innerHTML = `
+        <div class="row">
+          <span><strong>${safeText(p.name)}</strong> <span class="muted2">(${p.amenity})</span></span>
+          <span class="muted">${fmtDistance(p.distanceMeters)}</span>
+        </div>
+        <div class="muted2 small" style="margin-top:6px;">
+          ${extras.length ? `Tags: ${extras.join(", ")} · ` : ""}
+          <a href="${googleDirectionsLinkSingle(p.lat, p.lon)}" target="_blank" rel="noreferrer">Directions</a>
+        </div>
+      `;
+      ul.appendChild(li);
+
+      const colour = isWetherspoons(p) ? SPOONS : (p.amenity === "pub" ? PUB : BAR);
+      const m = L.circleMarker([p.lat, p.lon], {
+        radius: 6,
+        color: colour,
+        weight: 2,
+        fillColor: colour,
+        fillOpacity: 0.55
+      }).addTo(map).bindPopup(`${p.name} (${p.amenity})`);
+      listMarkers.push(m);
+    }
+
+    const pts = [[lat, lon]];
+    if (closestPub) pts.push([closestPub.lat, closestPub.lon]);
+    if (nearestStation) pts.push([nearestStation.lat, nearestStation.lon]);
+    if (pts.length >= 2) map.fitBounds(L.latLngBounds(pts).pad(0.25));
+    else map.setView([lat, lon], 15);
+  }
+
+  // Pub crawl
+  function generatePubCrawl(lat, lon, count){
+    let candidates = getFilteredPlaces(lat, lon);
+    if (candidates.length < count) return null;
+
+    candidates.sort((a,b) => {
+      const ap = a.amenity === "pub" ? 0 : 1;
+      const bp = b.amenity === "pub" ? 0 : 1;
+      if (ap !== bp) return ap - bp;
+      return a.distanceMeters - b.distanceMeters;
+    });
+
+    let maxHop = 900;
+    for (let attempt=0; attempt<3; attempt++){
+      const chosen = [candidates[0]];
+      while (chosen.length < count){
+        const last = chosen[chosen.length - 1];
+        const remaining = candidates.filter(p => !chosen.some(c => c.id === p.id));
+        let best = null;
+        for (const p of remaining){
+          const hop = haversineMeters(last.lat, last.lon, p.lat, p.lon);
+          const pubBias = (p.amenity === "pub") ? 0.85 : 1.0;
+          const score = hop * pubBias;
+          if (hop <= maxHop && (!best || score < best.score)) best = { place: p, score };
+        }
+        if (!best) break;
+        chosen.push(best.place);
+      }
+      if (chosen.length === count) return chosen;
+      maxHop += 600;
+    }
+    return candidates.slice(0, count);
+  }
+
+  function renderPubCrawl(lat, lon){
+    const count = parseInt($("crawlCount").value, 10) || 4;
+    const crawl = generatePubCrawl(lat, lon, count);
+    if (!crawl || !crawl.length){
+      $("crawlResults").textContent = "Not enough places to generate a crawl with current filters.";
+      return;
+    }
+
+    clearLayers(crawlMarkers);
+
+    for (let i=0; i<crawl.length; i++){
+      const p = crawl[i];
+      const m = L.marker([p.lat, p.lon]).addTo(map).bindPopup(`${i+1}. ${p.name}`);
+      crawlMarkers.push(m);
+    }
+
+    const routeLink = googleDirectionsLinkWithWaypoints(lat, lon, crawl);
+    const items = crawl.map((p,i) => `
+      <div style="margin:10px 0;">
+        <div class="row">
+          <span><strong>${i+1}. ${safeText(p.name)}</strong> <span class="muted2">(${p.amenity})</span></span>
+          <span class="muted">${fmtDistance(haversineMeters(lat, lon, p.lat, p.lon))}</span>
+        </div>
+        <div class="muted2 small" style="margin-top:6px;">
+          <a href="${googleDirectionsLinkSingle(p.lat, p.lon)}" target="_blank" rel="noreferrer">Directions to this stop</a>
+        </div>
+      </div>
+    `).join("");
+
+    $("crawlResults").innerHTML = `
+      <div class="row" style="margin-bottom:10px;">
+        ${pill("Crawl ready", "ok")}
+        <a href="${routeLink}" target="_blank" rel="noreferrer"><strong>Open full crawl route in Google Maps →</strong></a>
+      </div>
+      ${items}
+    `;
+
+    map.fitBounds(L.latLngBounds(crawl.map(p => [p.lat, p.lon])).pad(0.25));
+  }
+
+  // UI enable/disable
+  function setPlacesUiEnabled(enabled){
+    $("btnApplyFilters").disabled = !enabled;
+    $("btnPubCrawl").disabled = !enabled;
+    $("crawlCount").disabled = !enabled;
+  }
+  function wireFilterChanges(){
+    const ids = ["f_pub","f_bar","f_beergarden","f_realale","f_food","f_latelicense","radiusMeters"];
+    for (const id of ids){
+      $(id).addEventListener("change", () => {
+        if (lastLat != null && lastLon != null && placesRaw.length){
+          renderClosestAndList(lastLat, lastLon);
+          $("crawlResults").textContent = "—";
+        }
+      });
+    }
+  }
+
+  // Main refresh
+  async function refreshAll(lat, lon, accuracyMeters){
+    lastLat = lat; lastLon = lon; lastAcc = accuracyMeters;
+    $("btnRefresh").disabled = true;
+
+    setStatus("Refreshing: address, weather, nearest station, places, and Tube status…");
+    $("coords").textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)}${accuracyMeters ? ` (±${Math.round(accuracyMeters)}m)` : ""}`;
+    map.setView([lat, lon], 15);
+
+    // Address
+    try{
+      const geo = await reverseGeocode(lat, lon);
+      $("address").textContent = geo.display_name ? geo.display_name : "—";
+    } catch(e){
+      $("address").textContent = "Reverse geocode failed (rate limit or network).";
+      console.warn(e);
+    }
+
+    // Weather
+    try{
+      $("wxSummary").textContent = "Loading weather…";
+      const wx = await fetchWeather(lat, lon);
+      renderWeather(wx);
+    } catch(e){
+      $("wxSummary").textContent = "Weather failed (network).";
+      $("wxDetails").textContent = "—";
+      $("beerGardenBadge").innerHTML = pill("Weather unavailable", "warn");
+      console.warn(e);
+    }
+
+    // Nearest station
+    try{
+      $("nearestStation").textContent = "Finding nearest station…";
+      nearestStation = await computeNearestStation(lat, lon);
+      renderNearestStation(nearestStation);
+    } catch(e){
+      nearestStation = null;
+      renderNearestStation(null);
+      console.warn(e);
+    }
+
+    // Places
+    try{
+      const radius = Math.max(300, Math.min(5000, parseInt($("radiusMeters").value, 10) || 1500));
+      setPlacesUiEnabled(false);
+      $("closestResults").textContent = "Loading places…";
+      $("nearbyList").innerHTML = "";
+      $("crawlResults").textContent = "—";
+
+      await fetchPlacesWithCache(lat, lon, radius);
+      renderClosestAndList(lat, lon);
+      setPlacesUiEnabled(true);
+
+      const note = (placesSource === "cache")
+        ? `<div class="muted2 small">Using cached places (Overpass busy). Try Refresh for live.</div>`
+        : `<div class="muted2 small">Places loaded.</div>`;
+      $("closestResults").insertAdjacentHTML("afterbegin", note);
+    } catch(e){
+      if (placesRaw.length){
         placesSource = "cache";
         updatePlacesMeta();
-      }
-
-      if (!allowNetwork) {
-        if (cached) return { source: "cache", usedCache: true, refreshed: false };
-        // no cache + cooldown: wait until cooldown passes
-        const waitMs = PLACES_COOLDOWN_MS - (now - lastPlacesFetchAt);
-        throw new Error(`Throttled: wait ${Math.ceil(waitMs/1000)}s (no cache available).`);
-      }
-
-      lastPlacesFetchAt = now;
-
-      const query = buildPlacesOverpassQuery(lat, lon, radius);
-      const data = await overpassQuery(query);
-      const els = (data.elements || []).map(normalizePlace).filter(Boolean);
-
-      // de-duplicate by id
-      const uniq = new Map();
-      for (const p of els) uniq.set(p.id, p);
-
-      placesRaw = [...uniq.values()];
-      placesFetchedAt = Date.now();
-      placesSource = "live";
-
-      savePlacesCache(cacheKey, { places: placesRaw, fetchedAt: placesFetchedAt });
-
-      updatePlacesMeta();
-      return { source: "live", usedCache: !!cached, refreshed: true };
-    }
-
-    // =========================================================
-    // Filters (client-side)
-    // =========================================================
-    function getFilters() {
-      return {
-        pub: $("f_pub").checked,
-        bar: $("f_bar").checked,
-        beerGarden: $("f_beergarden").checked,
-        realAle: $("f_realale").checked,
-        food: $("f_food").checked,
-        late: $("f_latelicense").checked,
-      };
-    }
-
-    function placeMatchesFilters(place, filters) {
-      const tags = place.tags || {};
-      const amenity = (place.amenity || "").toLowerCase();
-
-      const amenityOk =
-        (filters.pub && amenity === "pub") ||
-        (filters.bar && amenity === "bar");
-
-      if (!amenityOk) return false;
-
-      // Beer garden: OSM tagging varies. We treat any of these as a "yes".
-      if (filters.beerGarden) {
-        const bg =
-          (tags.beer_garden || "").toLowerCase() === "yes" ||
-          (tags["outdoor_seating"] || "").toLowerCase() === "yes" ||
-          (tags["garden"] || "").toLowerCase() === "yes";
-        if (!bg) return false;
-      }
-
-      // Real ale: best-effort (OSM has no single standard). A few common-ish tags.
-      if (filters.realAle) {
-        const ra =
-          (tags.real_ale || "").toLowerCase() === "yes" ||
-          (tags.camra || "").toLowerCase() === "yes" ||
-          (tags["drink:real_ale"] || "").toLowerCase() === "yes" ||
-          (tags["brewery"] || "").toLowerCase() === "yes";
-        if (!ra) return false;
-      }
-
-      // Food: again best-effort
-      if (filters.food) {
-        const food =
-          (tags.food || "").toLowerCase() === "yes" ||
-          (tags["cuisine"] != null) ||
-          (tags["restaurant"] || "").toLowerCase() === "yes";
-        if (!food) return false;
-      }
-
-      // Late licence: best-effort (no universal tag). Use opening_hours heuristics if present.
-      if (filters.late) {
-        const oh = (tags.opening_hours || "").toLowerCase();
-        const lateHint = /;|24\/7|00:|01:|02:|03:/.test(oh); // crude heuristic
-        if (!lateHint) return false;
-      }
-
-      return true;
-    }
-
-    function getFilteredPlaces(lat, lon) {
-      const filters = getFilters();
-      const arr = placesRaw
-        .filter(p => placeMatchesFilters(p, filters))
-        .map(p => ({
-          ...p,
-          distanceMeters: haversineMeters(lat, lon, p.lat, p.lon)
-        }))
-        .sort((a,b) => a.distanceMeters - b.distanceMeters);
-
-      return arr;
-    }
-
-    // =========================================================
-    // Wetherspoons detection
-    // =========================================================
-    function isWetherspoons(place) {
-      const t = place.tags || {};
-      const n = (t.name || place.name || "").toLowerCase();
-      const b = (t.brand || "").toLowerCase();
-      const o = (t.operator || "").toLowerCase();
-
-      return (
-        n.includes("wetherspoon") || n.includes("wetherspoons") || n.includes("jd wetherspoon") ||
-        b.includes("wetherspoon") || b.includes("wetherspoons") || b.includes("jd wetherspoon") ||
-        o.includes("wetherspoon") || o.includes("wetherspoons") || o.includes("jd wetherspoon")
-      );
-    }
-
-    // =========================================================
-    // Render: Tube
-    // =========================================================
-    function renderTubeStatus(lines) {
-      const mapped = lines.map(l => {
-        const statuses = (l.lineStatuses || []).map(s => s.statusSeverityDescription).filter(Boolean);
-        const unique = [...new Set(statuses)];
-        const worst = unique.find(x => x !== "Good Service") || "Good Service";
-        return { name: l.name, status: worst };
-      });
-
-      mapped.sort((a, b) => {
-        const aBad = a.status !== "Good Service";
-        const bBad = b.status !== "Good Service";
-        if (aBad !== bBad) return aBad ? -1 : 1;
-        return a.name.localeCompare(b.name);
-      });
-
-      const html = mapped.map(x => {
-        const s = x.status.toLowerCase();
-        const cls = x.status === "Good Service" ? "ok" : (s.includes("minor") ? "warn" : "bad");
-        return `
-          <div class="row" style="margin: 6px 0;">
-            <span><strong>${x.name}</strong></span>
-            <span class="${cls}">${x.status}</span>
-          </div>
-        `;
-      }).join("");
-
-      $("tubeStatus").innerHTML = html || "No status available.";
-      $("tflUpdated").textContent = new Date().toLocaleString();
-    }
-
-    // =========================================================
-    // Render: Weather + Beer garden viable badge
-    // =========================================================
-    function weatherCodeToText(code) {
-      // Minimal mapping (good enough)
-      const m = {
-        0: "Clear",
-        1: "Mainly clear",
-        2: "Partly cloudy",
-        3: "Overcast",
-        45: "Fog",
-        48: "Rime fog",
-        51: "Light drizzle",
-        53: "Drizzle",
-        55: "Heavy drizzle",
-        61: "Light rain",
-        63: "Rain",
-        65: "Heavy rain",
-        71: "Light snow",
-        73: "Snow",
-        75: "Heavy snow",
-        80: "Rain showers",
-        81: "Rain showers",
-        82: "Violent showers",
-        95: "Thunderstorm"
-      };
-      return m[code] || `Weather code ${code}`;
-    }
-
-    function renderWeather(wx) {
-      const cur = wx.current;
-      const temp = cur?.temperature_2m;
-      const feels = cur?.apparent_temperature;
-      const precipNow = cur?.precipitation;
-      const wind = cur?.wind_speed_10m;
-      const code = cur?.weather_code;
-
-      const hourly = wx.hourly || {};
-      const precipNext = (hourly.precipitation && hourly.precipitation.length) ? hourly.precipitation.slice(0, 3) : [];
-      const windNext = (hourly.wind_speed_10m && hourly.wind_speed_10m.length) ? hourly.wind_speed_10m.slice(0, 3) : [];
-      const tempNext = (hourly.temperature_2m && hourly.temperature_2m.length) ? hourly.temperature_2m.slice(0, 3) : [];
-
-      const next1hPrecip = precipNext[0] ?? 0;
-      const next2hPrecip = precipNext[1] ?? 0;
-      const next3hPrecip = precipNext[2] ?? 0;
-
-      // Beer garden viable heuristic (simple + explainable)
-      // - temp >= 15C
-      // - precip next 1h < 0.2mm
-      // - wind < 12 m/s
-      let badgeCls = "warn";
-      let badgeText = "Maybe beer garden";
-      if (temp >= 15 && next1hPrecip < 0.2 && wind < 12) {
-        badgeCls = "ok";
-        badgeText = "Beer garden viable ✅";
-      } else if (temp < 12 || next1hPrecip >= 1.0 || wind >= 15) {
-        badgeCls = "bad";
-        badgeText = "Beer garden risk ❌";
-      }
-
-      $("beerGardenBadge").innerHTML = pill(badgeText, badgeCls);
-      $("wxSummary").innerHTML =
-        `<span class="kpi">${safeText(temp)}°C</span> (feels ${safeText(feels)}°C) · ${weatherCodeToText(code)} · wind ${safeText(wind)} m/s`;
-
-      $("wxDetails").textContent =
-        `Precip now: ${safeText(precipNow)} mm · Next 1–3h precip: ${next1hPrecip}/${next2hPrecip}/${next3hPrecip} mm · Next temps: ${tempNext.join("/") || "—"} °C`;
-
-      $("wxUpdated").textContent = new Date().toLocaleString();
-    }
-
-    // =========================================================
-    // Render: Places (closest, list, markers)
-    // =========================================================
-    function updatePlacesMeta() {
-      const when = placesFetchedAt ? new Date(placesFetchedAt).toLocaleTimeString() : "—";
-      $("placesMeta").textContent = `${placesRaw.length} places · ${placesSource} · ${when}`;
-    }
-
-    function renderClosestAndList(lat, lon) {
-      const filtered = getFilteredPlaces(lat, lon);
-
-      // Closest pub (strictly pub, regardless of filters) + closest spoons (from all raw)
-      const pubsOnly = placesRaw
-        .filter(p => (p.amenity || "").toLowerCase() === "pub")
-        .map(p => ({ ...p, distanceMeters: haversineMeters(lat, lon, p.lat, p.lon) }))
-        .sort((a,b) => a.distanceMeters - b.distanceMeters);
-
-      const spoons = placesRaw
-        .filter(isWetherspoons)
-        .map(p => ({ ...p, distanceMeters: haversineMeters(lat, lon, p.lat, p.lon) }))
-        .sort((a,b) => a.distanceMeters - b.distanceMeters);
-
-      const closestPub = pubsOnly[0] || null;
-      const closestSpoons = spoons[0] || null;
-
-      // markers for closest
-      if (closestPub) pubMarker = putMarker(pubMarker, closestPub.lat, closestPub.lon, `Closest pub: ${closestPub.name}`);
-      if (closestSpoons) spoonsMarker = putMarker(spoonsMarker, closestSpoons.lat, closestSpoons.lon, `Closest Wetherspoons: ${closestSpoons.name}`);
-
-      const closestHtml = [];
-      if (closestPub) {
-        closestHtml.push(`
-          <div style="margin-bottom: 10px;">
-            <div><strong>Closest pub</strong>: ${safeText(closestPub.name)}</div>
-            <div class="muted">Distance: ${fmtDistance(closestPub.distanceMeters)}</div>
-            <div class="muted"><a href="${googleDirectionsLinkSingle(closestPub.lat, closestPub.lon)}" target="_blank" rel="noreferrer">Google Maps walking directions</a></div>
-          </div>
-        `);
-      } else {
-        closestHtml.push(`<div><strong>Closest pub</strong>: — (no pubs returned)</div>`);
-      }
-
-      if (closestSpoons) {
-        closestHtml.push(`
-          <div>
-            <div><strong>Closest Wetherspoons</strong>: ${safeText(closestSpoons.name)}</div>
-            <div class="muted">Distance: ${fmtDistance(closestSpoons.distanceMeters)}</div>
-            <div class="muted"><a href="${googleDirectionsLinkSingle(closestSpoons.lat, closestSpoons.lon)}" target="_blank" rel="noreferrer">Google Maps walking directions</a></div>
-          </div>
-        `);
-      } else {
-        closestHtml.push(`<div style="margin-top: 6px;"><strong>Closest Wetherspoons</strong>: — (none found nearby)</div>`);
-      }
-
-      $("closestResults").innerHTML = closestHtml.join("");
-
-      // Top 10 list from filtered
-      const top = filtered.slice(0, 10);
-      const ul = $("nearbyList");
-      ul.innerHTML = "";
-
-      clearMarkers(placesMarkers);
-
-      for (const p of top) {
-        const li = document.createElement("li");
-        const tags = p.tags || {};
-        const extras = [];
-        if ((tags.outdoor_seating || "").toLowerCase() === "yes" || (tags.beer_garden || "").toLowerCase() === "yes") extras.push("beer garden");
-        if ((tags.real_ale || "").toLowerCase() === "yes" || (tags.camra || "").toLowerCase() === "yes") extras.push("real ale");
-        if ((tags.food || "").toLowerCase() === "yes") extras.push("food");
-        if (isWetherspoons(p)) extras.push("Wetherspoons");
-
-        li.innerHTML = `
-          <div class="row">
-            <span><strong>${safeText(p.name)}</strong> <span class="muted">(${p.amenity})</span></span>
-            <span class="muted">${fmtDistance(p.distanceMeters)}</span>
-          </div>
-          <div class="small muted">
-            ${extras.length ? "Tags: " + extras.join(", ") + " · " : ""}
-            <a href="${googleDirectionsLinkSingle(p.lat, p.lon)}" target="_blank" rel="noreferrer">Directions</a>
-          </div>
-        `;
-        ul.appendChild(li);
-
-        const m = L.circleMarker([p.lat, p.lon], { radius: 6 }).addTo(map).bindPopup(`${p.name} (${p.amenity})`);
-        placesMarkers.push(m);
-      }
-    }
-
-    // =========================================================
-    // Pub crawl generator
-    // =========================================================
-    function generatePubCrawl(lat, lon, count) {
-      // Use pubs only from filtered list if pub filter enabled, else fall back to pubs-only.
-      const filters = getFilters();
-      let candidates = getFilteredPlaces(lat, lon);
-
-      // Keep only pubs/bars (already), but crawl should feel "pubby": prefer pubs
-      // We'll keep both but bias pubs first.
-      candidates.sort((a,b) => {
-        const ap = (a.amenity === "pub") ? 0 : 1;
-        const bp = (b.amenity === "pub") ? 0 : 1;
-        if (ap !== bp) return ap - bp;
-        return a.distanceMeters - b.distanceMeters;
-      });
-
-      // Need enough candidates
-      if (candidates.length < count) return null;
-
-      // Greedy chain with max hop ~900m (keeps it walkable). If too strict, it relaxes.
-      const maxHopStart = 900;
-      let maxHop = maxHopStart;
-
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const chosen = [];
-        // Start from closest
-        chosen.push(candidates[0]);
-
-        while (chosen.length < count) {
-          const last = chosen[chosen.length - 1];
-          const remaining = candidates.filter(p => !chosen.some(c => c.id === p.id));
-          let best = null;
-
-          for (const p of remaining) {
-            const hop = haversineMeters(last.lat, last.lon, p.lat, p.lon);
-            // Slight preference for pubs
-            const pubBias = (p.amenity === "pub") ? 0.85 : 1.0;
-            const score = hop * pubBias;
-
-            if (hop <= maxHop && (!best || score < best.score)) {
-              best = { place: p, score, hop };
-            }
-          }
-
-          if (!best) break;
-          chosen.push(best.place);
-        }
-
-        if (chosen.length === count) return chosen;
-        maxHop += 600; // relax
-      }
-
-      // Fallback: just take first N closest (still useful)
-      return candidates.slice(0, count);
-    }
-
-    function renderPubCrawl(lat, lon) {
-      const count = parseInt($("crawlCount").value, 10);
-      const crawl = generatePubCrawl(lat, lon, count);
-
-      if (!crawl || !crawl.length) {
-        $("crawlResults").innerHTML = "Not enough places to generate a crawl with current filters.";
-        return;
-      }
-
-      // Mark crawl stops on map
-      // (reuse placesMarkers list already for top 10; we add numbered markers separately)
-      // We'll add simple markers for crawl with popups.
-      // Clear existing crawl markers by clearing all markers and re-rendering list markers
-      // but we don't want to wipe list markers; so we add normal Leaflet markers and keep references:
-      if (!window.__crawlMarkers) window.__crawlMarkers = [];
-      clearMarkers(window.__crawlMarkers);
-
-      for (let i = 0; i < crawl.length; i++) {
-        const p = crawl[i];
-        const m = L.marker([p.lat, p.lon]).addTo(map).bindPopup(`${i+1}. ${p.name}`);
-        window.__crawlMarkers.push(m);
-      }
-
-      // Build a Google Maps multi-stop route link (origin -> ... -> last)
-      const routeLink = googleDirectionsLinkWithWaypoints(lat, lon, crawl);
-
-      // Render crawl list
-      const items = crawl.map((p, i) => {
-        const d = haversineMeters(lat, lon, p.lat, p.lon);
-        return `
-          <div style="margin: 6px 0;">
-            <div class="row">
-              <span><strong>${i+1}. ${safeText(p.name)}</strong> <span class="muted">(${p.amenity})</span></span>
-              <span class="muted">${fmtDistance(d)}</span>
-            </div>
-            <div class="small muted">
-              <a href="${googleDirectionsLinkSingle(p.lat, p.lon)}" target="_blank" rel="noreferrer">Directions to this stop</a>
-            </div>
-          </div>
-        `;
-      }).join("");
-
-      $("crawlResults").innerHTML = `
-        <div class="row" style="margin-bottom: 8px;">
-          <span>${pill("Crawl ready", "ok")}</span>
-          <a href="${routeLink}" target="_blank" rel="noreferrer"><strong>Open full crawl route in Google Maps →</strong></a>
-        </div>
-        ${items}
-      `;
-
-      // Zoom map to crawl bounds
-      const bounds = L.latLngBounds(crawl.map(p => [p.lat, p.lon]));
-      map.fitBounds(bounds.pad(0.25));
-    }
-
-    // =========================================================
-    // UI enable/disable
-    // =========================================================
-    function setPlacesUiEnabled(enabled) {
-      $("btnApplyFilters").disabled = !enabled;
-      $("btnPubCrawl").disabled = !enabled;
-      $("crawlCount").disabled = !enabled;
-    }
-
-    function wireFiltersChangeHandlers() {
-      const ids = ["f_pub","f_bar","f_beergarden","f_realale","f_food","f_latelicense","radiusMeters"];
-      for (const id of ids) {
-        $(id).addEventListener("change", () => {
-          if (lastLat != null && lastLon != null && placesRaw.length) {
-            renderClosestAndList(lastLat, lastLon);
-            $("crawlResults").textContent = "—";
-          }
-        });
-      }
-    }
-
-    // =========================================================
-    // Main refresh
-    // =========================================================
-    async function refreshAll(lat, lon, accuracyMeters) {
-      lastLat = lat; lastLon = lon; lastAcc = accuracyMeters;
-
-      $("btnRefresh").disabled = true;
-      setStatus("Refreshing: address, weather, places, and TfL status…");
-
-      $("coords").textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)}${accuracyMeters ? ` (±${Math.round(accuracyMeters)}m)` : ""}`;
-      meMarker = putMarker(meMarker, lat, lon, "You are here");
-      map.setView([lat, lon], 15);
-
-      // Address
-      try {
-        const geo = await reverseGeocode(lat, lon);
-        $("address").textContent = geo.display_name ? geo.display_name : "—";
-      } catch (e) {
-        $("address").textContent = "Reverse geocode failed (rate limit or network).";
-        console.warn(e);
-      }
-
-      // Weather
-      try {
-        $("wxSummary").textContent = "Loading weather…";
-        const wx = await fetchWeather(lat, lon);
-        renderWeather(wx);
-      } catch (e) {
-        $("wxSummary").textContent = "Weather failed (network).";
-        $("wxDetails").textContent = "—";
-        $("beerGardenBadge").innerHTML = pill("Weather unavailable", "warn");
-        console.warn(e);
-      }
-
-      // Places (Overpass + cache)
-      try {
-        const radius = Math.max(300, Math.min(5000, parseInt($("radiusMeters").value, 10) || 1500));
-        setPlacesUiEnabled(false);
-
-        $("closestResults").textContent = "Loading places…";
-        $("nearbyList").innerHTML = "";
-        $("crawlResults").textContent = "—";
-
-        const r = await fetchPlacesWithCache(lat, lon, radius);
-        // If we showed cache first, now we will have live, but either way we render.
         renderClosestAndList(lat, lon);
         setPlacesUiEnabled(true);
-
-        const note = (placesSource === "cache")
-          ? "Using cached places (Overpass busy). Try Refresh for live."
-          : "Places loaded.";
-
-        $("closestResults").insertAdjacentHTML("afterbegin", `<div class="muted small">${note}</div>`);
-      } catch (e) {
-        // If we already had cached results from earlier fetchPlacesWithCache, render them anyway
-        if (placesRaw.length) {
-          placesSource = "cache";
-          updatePlacesMeta();
-          renderClosestAndList(lat, lon);
-          setPlacesUiEnabled(true);
-          $("closestResults").insertAdjacentHTML(
-            "afterbegin",
-            `<div class="muted small">Overpass busy; showing cached results. (${safeText(e.message)})</div>`
-          );
-        } else {
-          $("closestResults").textContent = "Nearby place search failed (Overpass busy / rate-limited). Wait a bit and refresh.";
-          console.warn(e);
-          setPlacesUiEnabled(false);
-        }
-      }
-
-      // TfL
-      try {
-        const lines = await fetchTubeStatus();
-        renderTubeStatus(lines);
-      } catch (e) {
-        $("tubeStatus").textContent = "TfL status failed (network/CORS).";
+        $("closestResults").insertAdjacentHTML("afterbegin",
+          `<div class="muted2 small">Overpass busy; showing cached results. (${safeText(e.message)})</div>`
+        );
+      } else {
+        $("closestResults").textContent = "Places failed (Overpass busy/rate-limited). Wait a bit and refresh.";
+        setPlacesUiEnabled(false);
         console.warn(e);
       }
-
-      setStatus("Done.");
-      $("btnRefresh").disabled = false;
-      $("btnFollow").disabled = false;
     }
 
-    // =========================================================
-    // Geolocation
-    // =========================================================
-    function getLocationOnce() {
-      if (!navigator.geolocation) {
-        setStatus("Geolocation is not supported by your browser.");
-        return;
-      }
-      setStatus("Requesting location permission…");
-
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const { latitude, longitude, accuracy } = pos.coords;
-          $("btnRefresh").disabled = false;
-          $("btnFollow").disabled = false;
-          await refreshAll(latitude, longitude, accuracy);
-        },
-        (err) => {
-          setStatus(`Location error: ${err.message}`);
-          console.warn(err);
-        },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 }
-      );
+    // Tube status
+    try{
+      const lines = await fetchTubeStatus();
+      renderTubeStatus(lines);
+    } catch(e){
+      $("tubeStatus").textContent = "Tube status failed (network/CORS).";
+      console.warn(e);
     }
 
-    function startWatch() {
-      if (!navigator.geolocation) return;
-      if (watchId !== null) return;
+    setStatus("Done.");
+    $("btnRefresh").disabled = false;
+    $("btnFollow").disabled = false;
+  }
 
-      setStatus("Watching location… (places are cached/throttled; TfL + weather refresh each update)");
-      $("btnStopWatch").disabled = false;
-
-      watchId = navigator.geolocation.watchPosition(
-        async (pos) => {
-          const { latitude, longitude, accuracy } = pos.coords;
-          $("btnRefresh").disabled = false;
-          await refreshAll(latitude, longitude, accuracy);
-        },
-        (err) => {
-          setStatus(`Watch error: ${err.message}`);
-          console.warn(err);
-        },
-        { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
-      );
+  // Geolocation
+  function getLocationOnce(){
+    if (!navigator.geolocation){
+      setStatus("Geolocation not supported by this browser.");
+      return;
     }
+    setStatus("Requesting location permission…");
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        $("btnRefresh").disabled = false;
+        $("btnFollow").disabled = false;
+        await refreshAll(latitude, longitude, accuracy);
+      },
+      (err) => {
+        setStatus(`Location error: ${err.message}`);
+        console.warn(err);
+      },
+      { enableHighAccuracy:true, timeout:15000, maximumAge:30000 }
+    );
+  }
 
-    function stopWatch() {
-      if (watchId === null) return;
-      navigator.geolocation.clearWatch(watchId);
-      watchId = null;
-      setStatus("Stopped watching location.");
-      $("btnStopWatch").disabled = true;
-    }
+  function startWatch(){
+    if (!navigator.geolocation) return;
+    if (watchId != null) return;
 
-    // =========================================================
-    // UI bindings
-    // =========================================================
-    $("btnLocate").addEventListener("click", getLocationOnce);
+    setStatus("Watching location… (places are throttled + cached to avoid Overpass rate limits)");
+    $("btnStopWatch").disabled = false;
 
-    $("btnRefresh").addEventListener("click", () => {
-      if (lastLat == null || lastLon == null) return;
-      refreshAll(lastLat, lastLon, lastAcc || 0);
-    });
+    watchId = navigator.geolocation.watchPosition(
+      async (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        $("btnRefresh").disabled = false;
+        await refreshAll(latitude, longitude, accuracy);
+      },
+      (err) => {
+        setStatus(`Watch error: ${err.message}`);
+        console.warn(err);
+      },
+      { enableHighAccuracy:true, maximumAge:10000, timeout:20000 }
+    );
+  }
 
-    $("btnFollow").addEventListener("click", startWatch);
-    $("btnStopWatch").addEventListener("click", stopWatch);
+  function stopWatch(){
+    if (watchId == null) return;
+    navigator.geolocation.clearWatch(watchId);
+    watchId = null;
+    $("btnStopWatch").disabled = true;
+    setStatus("Stopped watching location.");
+  }
 
-    $("btnApplyFilters").addEventListener("click", () => {
-      if (lastLat == null || lastLon == null) return;
-      renderClosestAndList(lastLat, lastLon);
-      $("crawlResults").textContent = "—";
-      setStatus("Filters applied.");
-    });
+  // Bindings
+  $("btnLocate").addEventListener("click", getLocationOnce);
+  $("btnRefresh").addEventListener("click", () => {
+    if (lastLat == null || lastLon == null) return;
+    refreshAll(lastLat, lastLon, lastAcc || 0);
+  });
+  $("btnFollow").addEventListener("click", startWatch);
+  $("btnStopWatch").addEventListener("click", stopWatch);
 
-    $("btnPubCrawl").addEventListener("click", () => {
-      if (lastLat == null || lastLon == null) return;
-      renderPubCrawl(lastLat, lastLon);
-      setStatus("Pub crawl generated.");
-    });
+  $("btnApplyFilters").addEventListener("click", () => {
+    if (lastLat == null || lastLon == null) return;
+    renderClosestAndList(lastLat, lastLon);
+    $("crawlResults").textContent = "—";
+    setStatus("Filters applied.");
+  });
 
-    wireFiltersChangeHandlers();
+  $("btnPubCrawl").addEventListener("click", () => {
+    if (lastLat == null || lastLon == null) return;
+    renderPubCrawl(lastLat, lastLon);
+    setStatus("Pub crawl generated.");
+  });
 
-    setPlacesUiEnabled(false);
-    setStatus("Click “Get my location” to begin.");
-  </script>
+  wireFilterChanges();
+  setPlacesUiEnabled(false);
+</script>
+
 </body>
 </html>
