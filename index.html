@@ -128,6 +128,7 @@
         <strong>Debug</strong>
         <div class="muted">
           If geolocation doesn’t work, ensure you’re on <code>https://</code> or <code>http://localhost</code>.
+          If pubs fail, Overpass may be rate-limiting; wait ~30 seconds and refresh.
         </div>
       </div>
     </div>
@@ -161,7 +162,6 @@
     }
 
     function directionsLink(lat, lon) {
-      // Google Maps directions from current location
       return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(lat + "," + lon)}&travelmode=walking`;
     }
 
@@ -192,10 +192,7 @@
     // ---------------------------
     // Data fetchers
     // ---------------------------
-
     async function reverseGeocode(lat, lon) {
-      // Nominatim: be gentle; include a User-Agent-ish header not possible from browser,
-      // but we can at least avoid spam.
       const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
       const res = await fetch(url, { headers: { "Accept": "application/json" } });
       if (!res.ok) throw new Error(`Reverse geocode failed: ${res.status}`);
@@ -203,30 +200,60 @@
     }
 
     async function fetchTubeStatus() {
-      // TfL Tube status
       const url = "https://api.tfl.gov.uk/Line/Mode/tube/Status";
       const res = await fetch(url, { headers: { "Accept": "application/json" } });
       if (!res.ok) throw new Error(`TfL status failed: ${res.status}`);
       return await res.json();
     }
 
+    // IMPORTANT: Overpass is often rate-limited. We:
+    // - try multiple endpoints
+    // - enforce a timeout
+    // - show a friendly error when all fail
     async function overpassQuery(query) {
-      const url = "https://overpass-api.de/api/interpreter";
-      const res = await fetch(url, {
-        method: "POST",
-        body: query,
-        headers: { "Content-Type": "text/plain;charset=UTF-8" }
-      });
-      if (!res.ok) throw new Error(`Overpass failed: ${res.status}`);
-      return await res.json();
+      const endpoints = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://overpass.openstreetmap.ru/api/interpreter",
+        "https://lz4.overpass-api.de/api/interpreter"
+      ];
+
+      const timeoutMs = 15000;
+      let lastErr = null;
+
+      for (const url of endpoints) {
+        const controller = new AbortController();
+        const t = setTimeout(() => controller.abort(), timeoutMs);
+
+        try {
+          const res = await fetch(url, {
+            method: "POST",
+            body: query,
+            headers: { "Content-Type": "text/plain;charset=UTF-8" },
+            signal: controller.signal
+          });
+
+          clearTimeout(t);
+
+          if (!res.ok) {
+            const msg = await res.text().catch(() => "");
+            throw new Error(`Overpass ${res.status} from ${url}${msg ? " — " + msg.slice(0, 120) : ""}`);
+          }
+
+          return await res.json();
+        } catch (e) {
+          clearTimeout(t);
+          lastErr = e;
+          console.warn("Overpass failed, trying next endpoint:", url, e);
+        }
+      }
+
+      throw lastErr || new Error("All Overpass endpoints failed.");
     }
 
     async function findNearbyPubs(lat, lon) {
-      // Search within 2500m for pubs + Wetherspoon-ish names
-      // We fetch:
-      // 1) all pubs (amenity=pub)
-      // 2) pubs/bars/restaurants with name matching Wetherspoon / JD Wetherspoon / Wetherspoons
-      const radius = 2500;
+      // Smaller radius reduces timeouts and payload sizes
+      const radius = 1500;
 
       const q = `
 [out:json][timeout:25];
@@ -246,7 +273,6 @@ out center tags;
     }
 
     function extractElementLatLon(el) {
-      // nodes have lat/lon; ways/relations may have center
       if (el.type === "node") return { lat: el.lat, lon: el.lon };
       if (el.center) return { lat: el.center.lat, lon: el.center.lon };
       return null;
@@ -258,6 +284,7 @@ out center tags;
       for (const el of elements) {
         const pos = extractElementLatLon(el);
         if (!pos) continue;
+
         const tags = el.tags || {};
         if (predicateFn && !predicateFn(tags)) continue;
 
@@ -265,7 +292,7 @@ out center tags;
         if (!best || d < best.distanceMeters) {
           best = {
             id: `${el.type}/${el.id}`,
-            name: tags.name || tags["brand"] || "Unnamed place",
+            name: tags.name || tags.brand || "Unnamed place",
             lat: pos.lat,
             lon: pos.lon,
             distanceMeters: d,
@@ -280,7 +307,6 @@ out center tags;
     // Renderers
     // ---------------------------
     function renderTubeStatus(lines) {
-      // Keep it readable: show lines with anything other than "Good Service" first.
       const mapped = lines.map(l => {
         const statuses = (l.lineStatuses || []).map(s => s.statusSeverityDescription).filter(Boolean);
         const unique = [...new Set(statuses)];
@@ -296,7 +322,8 @@ out center tags;
       });
 
       const html = mapped.map(x => {
-        const cls = x.status === "Good Service" ? "ok" : (x.status.toLowerCase().includes("minor") ? "warn" : "bad");
+        const s = x.status.toLowerCase();
+        const cls = x.status === "Good Service" ? "ok" : (s.includes("minor") ? "warn" : "bad");
         return `
           <div class="row" style="margin: 6px 0;">
             <span><strong>${x.name}</strong></span>
@@ -342,18 +369,20 @@ out center tags;
     // ---------------------------
     // Main flow
     // ---------------------------
+    let lastPlacesFetchAt = 0; // cooldown timer for Overpass calls
+
     async function refreshAll(lat, lon, accuracyMeters) {
       $("btnRefresh").disabled = true;
       setStatus("Refreshing: reverse geocode, nearby pubs, and TfL status…");
 
-      $("coords").textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)} (±${Math.round(accuracyMeters)}m)`;
+      $("coords").textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)}${accuracyMeters ? ` (±${Math.round(accuracyMeters)}m)` : ""}`;
 
       // marker for you
       meMarker = putMarker(meMarker, lat, lon, "You are here");
       map.setView([lat, lon], 15);
 
+      // Reverse geocode
       try {
-        // Reverse geocode
         const geo = await reverseGeocode(lat, lon);
         $("address").textContent = geo.display_name ? geo.display_name : "—";
       } catch (e) {
@@ -361,28 +390,47 @@ out center tags;
         console.warn(e);
       }
 
+      // Nearby places (Overpass) - cooldown to avoid rate limit
       try {
-        // Nearby places
-        const data = await findNearbyPubs(lat, lon);
-        const els = data.elements || [];
+        const now = Date.now();
+        const allowPlacesFetch = (now - lastPlacesFetchAt) > 30000; // 30s
 
-        const closestPub = pickClosest(els, lat, lon, (tags) => tags.amenity === "pub");
-        const closestSpoons = pickClosest(els, lat, lon, (tags) => {
-          const n = (tags.name || "").toLowerCase();
-          return n.includes("wetherspoon") || n.includes("wetherspoons") || n.includes("jd wetherspoon");
-        });
+        if (!allowPlacesFetch) {
+          const wait = Math.ceil((30000 - (now - lastPlacesFetchAt)) / 1000);
+          $("closestResults").textContent = `Waiting ${wait}s before next pub lookup (avoiding Overpass rate limits)…`;
+        } else {
+          lastPlacesFetchAt = now;
+          $("closestResults").textContent = "Looking up nearby pubs…";
 
-        renderClosest(closestPub, closestSpoons);
+          const data = await findNearbyPubs(lat, lon);
+          const els = data.elements || [];
 
-        if (closestPub) pubMarker = putMarker(pubMarker, closestPub.lat, closestPub.lon, `Closest pub: ${closestPub.name}`);
-        if (closestSpoons) spoonsMarker = putMarker(spoonsMarker, closestSpoons.lat, closestSpoons.lon, `Closest Wetherspoons: ${closestSpoons.name}`);
+          const closestPub = pickClosest(els, lat, lon, (tags) => tags.amenity === "pub");
+
+          // Wetherspoons matching: name OR operator/brand hints (more robust)
+          const closestSpoons = pickClosest(els, lat, lon, (tags) => {
+            const n = (tags.name || "").toLowerCase();
+            const b = (tags.brand || "").toLowerCase();
+            const o = (tags.operator || "").toLowerCase();
+            const hit =
+              n.includes("wetherspoon") || n.includes("wetherspoons") || n.includes("jd wetherspoon") ||
+              b.includes("wetherspoon") || b.includes("wetherspoons") || b.includes("jd wetherspoon") ||
+              o.includes("wetherspoon") || o.includes("wetherspoons") || o.includes("jd wetherspoon");
+            return hit;
+          });
+
+          renderClosest(closestPub, closestSpoons);
+
+          if (closestPub) pubMarker = putMarker(pubMarker, closestPub.lat, closestPub.lon, `Closest pub: ${closestPub.name}`);
+          if (closestSpoons) spoonsMarker = putMarker(spoonsMarker, closestSpoons.lat, closestSpoons.lon, `Closest Wetherspoons: ${closestSpoons.name}`);
+        }
       } catch (e) {
-        $("closestResults").textContent = "Nearby pub search failed (Overpass rate limit or network).";
+        $("closestResults").textContent = "Nearby pub search failed (Overpass busy / rate-limited). Wait ~30s and refresh.";
         console.warn(e);
       }
 
+      // Tube status
       try {
-        // Tube status
         const lines = await fetchTubeStatus();
         renderTubeStatus(lines);
       } catch (e) {
@@ -420,7 +468,7 @@ out center tags;
       if (!navigator.geolocation) return;
       if (watchId !== null) return;
 
-      setStatus("Watching location… (updates as you move)");
+      setStatus("Watching location… (pub lookup is throttled to avoid rate limits)");
       $("btnStopWatch").disabled = false;
 
       watchId = navigator.geolocation.watchPosition(
@@ -449,12 +497,13 @@ out center tags;
     // UI bindings
     // ---------------------------
     $("btnLocate").addEventListener("click", getLocationOnce);
+
     $("btnRefresh").addEventListener("click", () => {
-      // refresh uses last known marker position if we have it
       if (!meMarker) return;
       const { lat, lng } = meMarker.getLatLng();
       refreshAll(lat, lng, 0);
     });
+
     $("btnFollow").addEventListener("click", startWatch);
     $("btnStopWatch").addEventListener("click", stopWatch);
 
